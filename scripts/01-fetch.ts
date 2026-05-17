@@ -42,8 +42,14 @@ interface FetchResult {
   version: string;     // "17.7.0"
   versionTag: string;  // "h70"
   zipUrl: string;
-  docxFilename: string;
-  bytes: number;
+  /** Single-part specs ship one DOCX in the zip; large specs split into
+   *  multiple parts (`_cover.docx`, `_s00-s05.docx`, `_s06-s08.docx`,
+   *  `_s09-sxx.docx`). We skip the cover and keep every section part in
+   *  order. Parts array always has at least one entry; the parser reads
+   *  every entry and concatenates the HTML before running the heading
+   *  splitter. */
+  parts: string[];     // filenames written under raw/, sorted
+  bytes: number;       // total bytes across all parts
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -136,7 +142,7 @@ async function fetchAndExtract(entry: SpecEntry, zipFilename: string): Promise<F
     version,
     versionTag: tag,
     zipUrl: url,
-    docxFilename: "",
+    parts: [],
     bytes: 0,
   };
 
@@ -147,24 +153,43 @@ async function fetchAndExtract(entry: SpecEntry, zipFilename: string): Promise<F
 
   log(`fetch ${entry.spec} (${version}) ← ${zipFilename}`);
   const buf = (await httpGet(url, true)) as ArrayBuffer;
-  result.bytes = buf.byteLength;
+  const zipBytes = buf.byteLength;
 
-  // Unpack the docx out of the zip.
+  // Identify every .doc/.docx inside the zip, skipping the small "cover"
+  // sheet that 3GPP includes with multi-part specs (e.g. for 36.211 the
+  // zip has 36211-h40_cover.docx + three section parts; we want only the
+  // section parts). Pure cover ZIPs (single-file specs like 38.211) are
+  // not affected because their lone file has no _cover suffix.
   const zip = new AdmZip(Buffer.from(buf));
-  const docxEntry = zip.getEntries().find(e =>
-    !e.isDirectory && /\.(docx?)$/i.test(e.entryName)
-  );
-  if (!docxEntry) {
-    throw new Error(`${zipFilename}: no .docx inside (entries: ${zip.getEntries().map(e => e.entryName).join(", ")})`);
+  const allDocxEntries = zip.getEntries()
+    .filter(e => !e.isDirectory && /\.(docx?)$/i.test(e.entryName))
+    .filter(e => !/_cover\.docx?$/i.test(e.entryName))
+    // Sort by name so the parser walks parts in section order
+    // (s00-s05 < s06-s08 < s09-sxx < sAnnexes).
+    .sort((a, b) => a.entryName.localeCompare(b.entryName));
+  if (allDocxEntries.length === 0) {
+    throw new Error(`${zipFilename}: no non-cover .docx inside (entries: ${zip.getEntries().map(e => e.entryName).join(", ")})`);
   }
-  // Normalize the on-disk filename: <stem>-<tag>.docx, regardless of how
-  // 3GPP packaged it. Simpler for the parser to pick up later.
+
   const stem = specStem(entry.spec);
-  const outName = `${stem}-${tag}.docx`;
-  const outPath = path.join(RAW_DIR, outName);
-  await fs.writeFile(outPath, docxEntry.getData());
-  result.docxFilename = outName;
-  log(`  → wrote ${outName} (${(result.bytes / 1024 / 1024).toFixed(1)} MB zip)`);
+  for (let i = 0; i < allDocxEntries.length; i++) {
+    const entry = allDocxEntries[i];
+    // Preserve the original inner-name suffix when present (e.g. "_s00-05",
+    // "_sAnnexes") so it's obvious which part of the spec each file holds.
+    // For single-part specs (no underscore in the inner name) use a
+    // numeric suffix to keep the on-disk name unique per spec.
+    const baseName = entry.entryName.split("/").pop() || entry.entryName;
+    const suffixMatch = baseName.match(/[_-]([a-z0-9-]+)\.docx?$/i);
+    const suffix = allDocxEntries.length === 1
+      ? ""                                 // single file → no suffix
+      : `__${suffixMatch ? suffixMatch[1] : `part${i + 1}`}`;
+    const outName = `${stem}-${tag}${suffix}.docx`;
+    const outPath = path.join(RAW_DIR, outName);
+    await fs.writeFile(outPath, entry.getData());
+    result.parts.push(outName);
+    result.bytes += entry.header.size;
+  }
+  log(`  → wrote ${result.parts.length} part(s) for ${entry.spec} (${(zipBytes / 1024 / 1024).toFixed(1)} MB zip, ${(result.bytes / 1024 / 1024).toFixed(1)} MB extracted)`);
   return result;
 }
 

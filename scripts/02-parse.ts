@@ -57,7 +57,11 @@ interface FetchedSpec {
   version: string;
   versionTag: string;
   zipUrl: string;
-  docxFilename: string;
+  /** Filenames under raw/ that compose this spec. Multi-part specs
+   *  (e.g. 36.211, 38.101-1) ship as several DOCXes inside one ZIP,
+   *  pre-sorted lexically by 01-fetch.ts so concatenation walks them
+   *  in section order. */
+  parts: string[];
   bytes: number;
 }
 
@@ -250,19 +254,33 @@ function buildLeafClauses(
 }
 
 async function parseSpec(spec: FetchedSpec): Promise<{ rows: ClauseRow[]; warnings: string[] }> {
-  const docxPath = path.join(RAW_DIR, spec.docxFilename);
-  log(`parsing ${spec.spec} (${spec.docxFilename})`);
-  const { value: html, messages } = await mammoth.convertToHtml({ path: docxPath });
-  const conversionWarnings = messages
-    .filter(m => m.type === "warning")
-    .map(m => m.message)
-    .slice(0, 5); // cap noise
+  if (!spec.parts || spec.parts.length === 0) {
+    return { rows: [], warnings: ["no parts listed in manifest"] };
+  }
+  log(`parsing ${spec.spec} (${spec.parts.length} part${spec.parts.length > 1 ? "s" : ""})`);
 
-  const blocks = splitOnHeadings(html);
+  // Concatenate the HTML from each part DOCX in order. mammoth emits a
+  // headerless HTML fragment (no <html>/<body> wrapper), so simple
+  // string concatenation preserves the document flow. The heading
+  // splitter then walks the combined stream as if it were one file.
+  let combinedHtml = "";
+  const conversionWarnings: string[] = [];
+  for (const partName of spec.parts) {
+    const partPath = path.join(RAW_DIR, partName);
+    const { value: html, messages } = await mammoth.convertToHtml({ path: partPath });
+    combinedHtml += html + "\n";
+    for (const m of messages) {
+      if (m.type === "warning" && conversionWarnings.length < 5) {
+        conversionWarnings.push(`${partName}: ${m.message}`);
+      }
+    }
+  }
+
+  const blocks = splitOnHeadings(combinedHtml);
   if (blocks.length === 0) {
     return {
       rows: [],
-      warnings: [`no numbered headings parsed from ${spec.docxFilename}`, ...conversionWarnings],
+      warnings: [`no numbered headings parsed (parts=${spec.parts.length})`, ...conversionWarnings],
     };
   }
   const { rows, warnings } = buildLeafClauses(spec, blocks);
@@ -272,7 +290,7 @@ async function parseSpec(spec: FetchedSpec): Promise<{ rows: ClauseRow[]; warnin
 async function main() {
   const manifestRaw = await fs.readFile(FETCH_MANIFEST, "utf8");
   const manifest = JSON.parse(manifestRaw) as { specs: FetchedSpec[] };
-  const specs = manifest.specs.filter(s => s.docxFilename && s.docxFilename.length > 0);
+  const specs = manifest.specs.filter(s => s.parts && s.parts.length > 0);
   if (specs.length === 0) {
     console.error("[parse] no parsed-able specs — did you run `npm run fetch` (non-dry)?");
     process.exit(1);
