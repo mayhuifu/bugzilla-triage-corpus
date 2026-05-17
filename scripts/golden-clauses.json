@@ -1,0 +1,60 @@
+{
+  "description": "Hand-curated golden snippets used by 03-index.ts to validate parse quality. Each entry is checked against the parsed text via substring/Levenshtein comparison. If the parsed clause doesn't contain the golden snippet, the build fails — catches mammoth regressions or unintended cross-release drift. Snippets are kept short (a single distinctive phrase) so they survive minor whitespace/formatting differences.",
+  "clauses": [
+    {
+      "id": "38.211#6.1",
+      "citation": "3GPP TS 38.211 §6.1",
+      "snippet": "Uplink"
+    },
+    {
+      "id": "38.211#6.3.1",
+      "citation": "3GPP TS 38.211 §6.3.1",
+      "snippet": "Physical uplink shared channel"
+    },
+    {
+      "id": "38.213#7.1.1",
+      "citation": "3GPP TS 38.213 §7.1.1",
+      "snippet": "UE procedure for transmitting"
+    },
+    {
+      "id": "38.331#5.3.3",
+      "citation": "3GPP TS 38.331 §5.3.3",
+      "snippet": "RRC connection establishment"
+    },
+    {
+      "id": "38.321#5.4.3",
+      "citation": "3GPP TS 38.321 §5.4.3",
+      "snippet": "logical channel"
+    },
+    {
+      "id": "38.300#7",
+      "citation": "3GPP TS 38.300 §7",
+      "snippet": "Layer 2"
+    },
+    {
+      "id": "38.101-1#6.5.2",
+      "citation": "3GPP TS 38.101-1 §6.5.2",
+      "snippet": "Frequency error"
+    },
+    {
+      "id": "36.211#6.1",
+      "citation": "3GPP TS 36.211 §6.1",
+      "snippet": "Overview"
+    },
+    {
+      "id": "36.213#7.1",
+      "citation": "3GPP TS 36.213 §7.1",
+      "snippet": "UE procedure"
+    },
+    {
+      "id": "36.331#5.3.3",
+      "citation": "3GPP TS 36.331 §5.3.3",
+      "snippet": "RRC connection establishment"
+    },
+    {
+      "id": "36.521-1#6.5.1",
+      "citation": "3GPP TS 36.521-1 §6.5.1",
+      "snippet": "Frequency error"
+    }
+  ]
+}

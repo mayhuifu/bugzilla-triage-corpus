@@ -1,0 +1,25 @@
+{
+  "name": "bugzilla-triage-corpus",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Offline pipeline to build a 3GPP Rel-17 NR+LTE spec corpus (SQLite + FTS5) consumed by bugzilla-triage-desktop.",
+  "type": "module",
+  "scripts": {
+    "fetch": "tsx scripts/01-fetch.ts",
+    "parse": "tsx scripts/02-parse.ts",
+    "index": "tsx scripts/03-index.ts",
+    "publish-corpus": "tsx scripts/04-publish.ts",
+    "build": "npm run fetch && npm run parse && npm run index",
+    "dry-run": "DRY_RUN=1 tsx scripts/01-fetch.ts && DRY_RUN=1 tsx scripts/02-parse.ts && tsx scripts/03-index.ts"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "adm-zip": "^0.5.16",
+    "@types/adm-zip": "^0.5.7",
+    "better-sqlite3": "^11.7.0",
+    "mammoth": "^1.8.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

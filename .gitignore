@@ -1,0 +1,16 @@
+# Build outputs
+dist/
+node_modules/
+
+# Raw 3GPP files — too large for git history, regenerated on demand.
+raw/
+*.zip
+*.docx
+
+# Final corpus — published as GH Release asset, not checked into the repo.
+out/
+
+# Editor noise
+.DS_Store
+.vscode/
+*.log
