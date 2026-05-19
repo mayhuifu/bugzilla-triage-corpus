@@ -7,10 +7,13 @@
   "scripts": {
     "fetch": "tsx scripts/01-fetch.ts",
     "parse": "tsx scripts/02-parse.ts",
+    "embed": "tsx scripts/embed.ts",
     "index": "tsx scripts/03-index.ts",
+    "eval": "tsx scripts/05-eval.ts",
     "publish-corpus": "tsx scripts/04-publish.ts",
-    "build": "npm run fetch && npm run parse && npm run index",
-    "dry-run": "DRY_RUN=1 tsx scripts/01-fetch.ts && DRY_RUN=1 tsx scripts/02-parse.ts && tsx scripts/03-index.ts"
+    "build": "npm run fetch && npm run parse && npm run embed && npm run index && npm run eval",
+    "dry-run": "DRY_RUN=1 tsx scripts/01-fetch.ts && DRY_RUN=1 tsx scripts/02-parse.ts && tsx scripts/03-index.ts",
+    "dev:precision-check": "tsx scripts/dev-precision-check.ts"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
@@ -19,6 +22,7 @@
     "@types/adm-zip": "^0.5.7",
     "better-sqlite3": "^11.7.0",
     "mammoth": "^1.8.0",
+    "sqlite-vec": "^0.1.6",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
