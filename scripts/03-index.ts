@@ -250,10 +250,14 @@ async function main() {
   }
 
   // ── Insert clauses ─────────────────────────────────────────
+  // INSERT OR IGNORE: belt-and-suspenders against duplicate clause ids
+  // slipping through the parser. With the v2 parser-level dedup this
+  // should never trigger, but if it does, the build keeps going and the
+  // final count log surfaces the discrepancy.
   const insertClause = db.prepare(`
-    INSERT INTO clauses (id, spec, release, version, clause_no, title,
-                         parent_id, parent_title, path, text,
-                         tables_json, figures_json, mentions_json, citation)
+    INSERT OR IGNORE INTO clauses (id, spec, release, version, clause_no, title,
+                                   parent_id, parent_title, path, text,
+                                   tables_json, figures_json, mentions_json, citation)
     VALUES (@id, @spec, @release, @version, @clauseNo, @title,
             @parentId, @parentTitle, @path, @text,
             @tablesJson, @figuresJson, @mentionsJson, @citation)
@@ -288,8 +292,15 @@ async function main() {
     const getRowid = db.prepare(`SELECT rowid FROM clauses WHERE id = ?`).pluck();
     const insertVec = db.prepare(`INSERT INTO clauses_vec(rowid, embedding) VALUES (?, ?)`);
     const txVecs = db.transaction(() => {
-      let n = 0, missing = 0;
+      let n = 0, missing = 0, dup = 0;
+      // Defensive dedup: if the embed sidecar emitted the same id twice
+      // (because the v1 parser produced duplicates), the second INSERT
+      // into clauses_vec would fail with a PK collision. Skip silently
+      // and count for the log.
+      const seen = new Set<string>();
       for (const e of clauseEmb!) {
+        if (seen.has(e.id)) { dup++; continue; }
+        seen.add(e.id);
         const rid = getRowid.get(e.id);
         if (rid == null) { missing++; continue; }
         // sqlite-vec rejects non-INTEGER rowids; better-sqlite3 binds
@@ -300,6 +311,7 @@ async function main() {
         if (n % 1000 === 0) log(`  vec inserted ${n}/${clauseEmb!.length}…`);
       }
       if (missing > 0) warn(`${missing} embedding(s) had no matching clause row`);
+      if (dup > 0) warn(`${dup} duplicate embedding(s) skipped`);
       return n;
     });
     const vecCount = txVecs();

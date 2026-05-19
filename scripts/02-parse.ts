@@ -73,15 +73,15 @@ const STYLE_MAP = [
   "p[style-name='Heading 7'] => h6:fresh",
   "p[style-name='Heading 8'] => h6:fresh",
   "p[style-name='Heading 9'] => h6:fresh",
-  // 3GPP-internal test-spec headings (best-effort).
+  // 3GPP-internal test-spec headings. Only the four codes documented
+  // in the v1 README hypothesis are mapped — speculative additions
+  // like 'TS', 'TF' turned out to be table-related styles (Table
+  // Subhead / Table Footer) that produce junk like '<h4>788 MHz</h4>'
+  // when mapped to a heading level.
   "p[style-name='ZA'] => h2:fresh",
-  "p[style-name='ZB'] => h3:fresh",
-  "p[style-name='ZC'] => h4:fresh",
   "p[style-name='ZT'] => h3:fresh",
   "p[style-name='TT'] => h3:fresh",   // test title
   "p[style-name='TAR'] => h4:fresh",  // test-applicability-rule
-  "p[style-name='TF'] => h4:fresh",   // test-feature
-  "p[style-name='TS'] => h4:fresh",   // test-step
 ].join("\n");
 
 interface FetchedSpec {
@@ -155,6 +155,12 @@ function parseHeading(rawText: string): { clauseNo: string; title: string } | nu
   const title = m[2].replace(/\s+/g, " ").trim();
   if (/\.\.\.\s*\d+\s*$/.test(text)) return null;     // ToC line
   if (title.length > 200) return null;                // not a real heading
+  // Real 3GPP top-level clauses are 1..9 (Scope, References, …); a pure
+  // integer >= 10 is overwhelmingly a frequency band cell, table row
+  // number, or other in-table content that mammoth happened to surface
+  // as a paragraph. Reject so we don't generate clauses like
+  // `38.101-1#788 MHz`.
+  if (/^\d+$/.test(clauseNo) && Number(clauseNo) >= 10) return null;
   return { clauseNo, title };
 }
 
@@ -338,6 +344,8 @@ function buildLeafClauses(
 
   const rows: ClauseRow[] = [];
 
+  const emittedIds = new Set<string>();
+  let duplicateSkips = 0;
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
     const prefix = b.clauseNo + ".";
@@ -356,6 +364,18 @@ function buildLeafClauses(
     const parentTitle = parentNo ? (titleByClauseNo.get(parentNo) ?? null) : null;
 
     const clauseId = `${spec.spec}#${b.clauseNo}`;
+    // First-wins dedup. Multi-part DOCXes occasionally re-use the same
+    // clauseNo across parts (e.g. a recap heading in an annex, or a
+    // boundary section repeated by accident). Keep the first occurrence
+    // — usually the canonical definition — and warn on the rest so a
+    // future maintainer can investigate without the build crashing on
+    // the PK constraint downstream.
+    if (emittedIds.has(clauseId)) {
+      duplicateSkips++;
+      continue;
+    }
+    emittedIds.add(clauseId);
+
     const { tables, figures } = extractTablesAndFigures(b.bodyHtml, clauseId);
     const text = htmlToText(b.bodyHtml);
     if (text.length < 30) {
@@ -378,6 +398,9 @@ function buildLeafClauses(
       mentions: [],
       citation: `3GPP TS ${spec.spec} §${b.clauseNo}`,
     });
+  }
+  if (duplicateSkips > 0) {
+    warnings.push(`skipped ${duplicateSkips} duplicate clauseNo occurrence(s)`);
   }
 
   // Drop pre-"1 Scope" front-matter rows.
