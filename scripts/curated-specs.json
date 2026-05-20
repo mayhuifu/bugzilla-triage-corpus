@@ -33,6 +33,10 @@
     { "spec": "36.521-1", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); UE conformance specification; Radio transmission and reception; Part 1: Conformance testing" },
     { "spec": "36.521-2", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); UE conformance specification; Radio transmission and reception; Part 2: Implementation Conformance Statement (ICS)" },
     { "spec": "36.521-3", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); UE conformance specification; Radio transmission and reception; Part 3: Radio Resource Management (RRM) conformance testing" },
-    { "spec": "36.523-1", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA) and Evolved Packet Core (EPC); User Equipment (UE) conformance specification; Part 1: Protocol conformance specification" }
+    { "spec": "36.523-1", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA) and Evolved Packet Core (EPC); User Equipment (UE) conformance specification; Part 1: Protocol conformance specification" },
+    { "spec": "38.304", "series": "38", "title": "NR User Equipment (UE) procedures in Idle mode and in RRC Inactive state" },
+    { "spec": "38.133", "series": "38", "title": "NR Requirements for support of radio resource management" },
+    { "spec": "36.304", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); User Equipment (UE) procedures in idle mode" },
+    { "spec": "36.133", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); Requirements for support of radio resource management" }
   ]
 }
