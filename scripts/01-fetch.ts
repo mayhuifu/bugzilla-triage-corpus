@@ -23,7 +23,9 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import * as os from "node:os";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import AdmZip from "adm-zip";
 
 import curated from "./curated-specs.json" with { type: "json" };
@@ -50,6 +52,68 @@ interface FetchResult {
    *  splitter. */
   parts: string[];     // filenames written under raw/, sorted
   bytes: number;       // total bytes across all parts
+  /** Number of parts that were Word 97 Composite Documents and went
+   *  through the libreoffice fallback (v2, SPEC.md §14 ADR-007). */
+  convertedFromLegacyDoc: number;
+}
+
+/** OLE2 Compound Document File magic (Word 97-2003 .doc inside a .docx
+ *  filename — 3GPP does this on a handful of older specs, e.g. 38.201). */
+const OLE2_MAGIC = Buffer.from([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
+
+/** PK\x03\x04 — modern .docx (= zip) magic. */
+const ZIP_MAGIC = Buffer.from([0x50, 0x4B, 0x03, 0x04]);
+
+function isLegacyDoc(buf: Buffer): boolean {
+  return buf.length >= 8 && buf.subarray(0, 8).equals(OLE2_MAGIC);
+}
+function isDocxZip(buf: Buffer): boolean {
+  return buf.length >= 4 && buf.subarray(0, 4).equals(ZIP_MAGIC);
+}
+
+let _sofficeChecked = false;
+let _sofficeBin: string | null = null;
+/** Locate libreoffice's headless CLI once, lazily. Returns null when
+ *  not installed (so legacy .doc parts are skipped with a warning
+ *  instead of aborting the whole fetch). */
+function findSoffice(): string | null {
+  if (_sofficeChecked) return _sofficeBin;
+  _sofficeChecked = true;
+  for (const candidate of ["libreoffice", "soffice"]) {
+    const r = spawnSync(candidate, ["--version"], { encoding: "utf8" });
+    if (r.status === 0) {
+      _sofficeBin = candidate;
+      return candidate;
+    }
+  }
+  warn("libreoffice / soffice not on PATH — legacy .doc parts cannot be upgraded");
+  return null;
+}
+
+/** Convert an in-memory .doc buffer to .docx via libreoffice headless.
+ *  Returns the resulting .docx bytes, or null on conversion failure. */
+async function convertDocToDocx(docBuf: Buffer, hint: string): Promise<Buffer | null> {
+  const bin = findSoffice();
+  if (!bin) return null;
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "3gpp-doc-"));
+  try {
+    const inPath = path.join(tmpDir, "input.doc");
+    await fs.writeFile(inPath, docBuf);
+    const r = spawnSync(
+      bin,
+      ["--headless", "--convert-to", "docx", "--outdir", tmpDir, inPath],
+      { encoding: "utf8", timeout: 120_000 },
+    );
+    if (r.status !== 0) {
+      warn(`libreoffice conversion failed for ${hint}: ${r.stderr || r.stdout}`);
+      return null;
+    }
+    const outPath = path.join(tmpDir, "input.docx");
+    return await fs.readFile(outPath);
+  } finally {
+    // Best-effort cleanup; ignore failures.
+    try { await fs.rm(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -144,6 +208,7 @@ async function fetchAndExtract(entry: SpecEntry, zipFilename: string): Promise<F
     zipUrl: url,
     parts: [],
     bytes: 0,
+    convertedFromLegacyDoc: 0,
   };
 
   if (DRY_RUN) {
@@ -173,21 +238,40 @@ async function fetchAndExtract(entry: SpecEntry, zipFilename: string): Promise<F
 
   const stem = specStem(entry.spec);
   for (let i = 0; i < allDocxEntries.length; i++) {
-    const entry = allDocxEntries[i];
+    const innerEntry = allDocxEntries[i];
     // Preserve the original inner-name suffix when present (e.g. "_s00-05",
     // "_sAnnexes") so it's obvious which part of the spec each file holds.
     // For single-part specs (no underscore in the inner name) use a
     // numeric suffix to keep the on-disk name unique per spec.
-    const baseName = entry.entryName.split("/").pop() || entry.entryName;
+    const baseName = innerEntry.entryName.split("/").pop() || innerEntry.entryName;
     const suffixMatch = baseName.match(/[_-]([a-z0-9-]+)\.docx?$/i);
     const suffix = allDocxEntries.length === 1
       ? ""                                 // single file → no suffix
       : `__${suffixMatch ? suffixMatch[1] : `part${i + 1}`}`;
     const outName = `${stem}-${tag}${suffix}.docx`;
     const outPath = path.join(RAW_DIR, outName);
-    await fs.writeFile(outPath, entry.getData());
+
+    let bytes = innerEntry.getData();
+    // ADR-007: detect Word 97 Composite Document (legacy .doc shipped
+    // under a .docx filename — happens on 38.201 and a couple of older
+    // specs). Run libreoffice headless to upgrade before mammoth sees it.
+    if (isLegacyDoc(bytes)) {
+      log(`  ⤷ ${baseName} is legacy .doc, converting via libreoffice…`);
+      const upgraded = await convertDocToDocx(bytes, `${entry.spec}/${baseName}`);
+      if (upgraded && isDocxZip(upgraded)) {
+        bytes = upgraded;
+        result.convertedFromLegacyDoc++;
+      } else {
+        warn(`${entry.spec}: legacy-doc conversion failed for ${baseName}; skipping this part`);
+        continue;
+      }
+    } else if (!isDocxZip(bytes)) {
+      warn(`${entry.spec}: ${baseName} has unrecognized magic; treating as opaque and writing as-is`);
+    }
+
+    await fs.writeFile(outPath, bytes);
     result.parts.push(outName);
-    result.bytes += entry.header.size;
+    result.bytes += bytes.length;
   }
   log(`  → wrote ${result.parts.length} part(s) for ${entry.spec} (${(zipBytes / 1024 / 1024).toFixed(1)} MB zip, ${(result.bytes / 1024 / 1024).toFixed(1)} MB extracted)`);
   return result;

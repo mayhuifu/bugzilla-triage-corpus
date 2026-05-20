@@ -1,0 +1,13 @@
+{
+  "description": "Synthetic micro-eval used by scripts/dev-precision-check.ts to validate the hybrid (BM25+dense+RRF) architecture against pure FTS5 BM25. 'easy' queries should land for both retrievers; 'hard' queries use paraphrase/synonym/acronym mismatch and should expose dense retrieval's advantage. Not shipped with the corpus.",
+  "queries": [
+    { "qid": 1,  "query": "PUCCH format 0 cyclic shift base sequence",                       "expectedClauseId": "38.211#6.3.2.1",  "difficulty": "easy", "stratum": "NR-PHY" },
+    { "qid": 2,  "query": "uplink ACK short feedback one symbol transmission",               "expectedClauseId": "38.211#6.3.2.1",  "difficulty": "hard", "stratum": "NR-PHY" },
+    { "qid": 3,  "query": "RRCReconfiguration with reconfigurationWithSync target cell",     "expectedClauseId": "38.331#5.3.5.1",  "difficulty": "easy", "stratum": "NR-RRC" },
+    { "qid": 4,  "query": "intra-frequency handover command to a target serving cell",       "expectedClauseId": "38.331#5.3.5.1",  "difficulty": "hard", "stratum": "NR-RRC" },
+    { "qid": 5,  "query": "buffer status report triggered by new data arriving on a logical channel", "expectedClauseId": "38.321#5.4.3.1", "difficulty": "hard", "stratum": "NR-MAC" },
+    { "qid": 6,  "query": "secondary serving cell turned on by MAC control element",         "expectedClauseId": "38.300#9.2.3",    "difficulty": "hard", "stratum": "NR-L2" },
+    { "qid": 7,  "query": "T310 expiry leading to connection re-establishment",              "expectedClauseId": "36.331#5.3.10",   "difficulty": "easy", "stratum": "LTE-RRC" },
+    { "qid": 8,  "query": "UE saving battery by skipping PDCCH outside on-duration",          "expectedClauseId": "36.321#5.3.1",    "difficulty": "hard", "stratum": "LTE-MAC" }
+  ]
+}
