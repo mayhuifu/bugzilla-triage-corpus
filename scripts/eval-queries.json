@@ -41,7 +41,7 @@
     {
       "qid": 5,
       "query": "SCG failure information report missing from UE",
-      "expectedClauseId": "38.331#5.7.3",
+      "expectedClauseId": "38.331#5.7.3.1",
       "stratum": "NR-RRC",
       "difficulty": "easy"
     },
@@ -66,7 +66,6 @@
       "stratum": "NR-RRC",
       "difficulty": "easy"
     },
-
     {
       "qid": 10,
       "query": "PUCCH format 0 sequence cyclic shift incorrect",
@@ -84,35 +83,35 @@
     {
       "qid": 12,
       "query": "PUCCH format 3 DFT-s-OFDM payload mis-modulated",
-      "expectedClauseId": "38.211#6.3.2.4",
+      "expectedClauseId": "38.211#6.3.2.4.1",
       "stratum": "NR-PHY",
       "difficulty": "easy"
     },
     {
       "qid": 13,
       "query": "PUSCH DMRS sequence generation uses wrong scrambling identity",
-      "expectedClauseId": "38.211#6.4.1.1",
+      "expectedClauseId": "38.211#6.4.1.1.1",
       "stratum": "NR-PHY",
       "difficulty": "easy"
     },
     {
       "qid": 14,
       "query": "uplink reference signal mapping causes channel estimation failure",
-      "expectedClauseId": "38.211#6.4.1.1",
+      "expectedClauseId": "38.211#6.4.1.1.1",
       "stratum": "NR-PHY",
       "difficulty": "hard"
     },
     {
       "qid": 15,
       "query": "SSB synchronization signal block transmission timing off",
-      "expectedClauseId": "38.211#7.4.3.1",
+      "expectedClauseId": "38.211#7.4.3.1.1",
       "stratum": "NR-PHY",
       "difficulty": "hard"
     },
     {
       "qid": 16,
       "query": "PDCCH not found at the expected aggregation level in the search space",
-      "expectedClauseId": "38.213#10.1",
+      "expectedClauseId": "38.213#10.1.1",
       "stratum": "NR-PHY",
       "difficulty": "hard"
     },
@@ -137,7 +136,6 @@
       "stratum": "NR-MAC",
       "difficulty": "easy"
     },
-
     {
       "qid": 20,
       "query": "UL grant via DCI with C-RNTI not consumed by the MAC entity",
@@ -176,7 +174,7 @@
     {
       "qid": 25,
       "query": "logical channel prioritization gives wrong order in multiplexing",
-      "expectedClauseId": "38.321#5.4.3.1",
+      "expectedClauseId": "38.321#5.4.3.1.1",
       "stratum": "NR-MAC",
       "difficulty": "easy"
     },
@@ -190,7 +188,7 @@
     {
       "qid": 27,
       "query": "BWP switch via DCI not completed before deadline",
-      "expectedClauseId": "38.321#5.15",
+      "expectedClauseId": "38.321#5.15.1",
       "stratum": "NR-MAC",
       "difficulty": "hard"
     },
@@ -208,25 +206,24 @@
       "stratum": "NR-MAC",
       "difficulty": "easy"
     },
-
     {
       "qid": 30,
       "query": "Carrier aggregation activation handshake delayed",
-      "expectedClauseId": "38.300#9.2.3",
+      "expectedClauseId": "38.300#9.2.3.1",
       "stratum": "NR-L2",
       "difficulty": "hard"
     },
     {
       "qid": 31,
       "query": "secondary serving cell turned on by gNB but UE not transmitting on it",
-      "expectedClauseId": "38.300#9.2.3",
+      "expectedClauseId": "38.300#9.2.3.1",
       "stratum": "NR-L2",
       "difficulty": "hard"
     },
     {
       "qid": 32,
       "query": "PDCP duplication enabled but UE only sends on primary RLC entity",
-      "expectedClauseId": "38.323#5.2.1.4",
+      "expectedClauseId": "38.323#5.11.1",
       "stratum": "NR-L2",
       "difficulty": "easy"
     },
@@ -237,7 +234,6 @@
       "stratum": "NR-L2",
       "difficulty": "hard"
     },
-
     {
       "qid": 40,
       "query": "UE maximum output power on band n41 below spec at hot temperature",
@@ -248,54 +244,52 @@
     {
       "qid": 41,
       "query": "transmit signal quality EVM exceeds limit at edge of channel",
-      "expectedClauseId": "38.101-1#6.4.2",
+      "expectedClauseId": "38.101-1#6.4.2.0",
       "stratum": "NR-RF",
       "difficulty": "easy"
     },
     {
       "qid": 42,
       "query": "intermodulation product appears in adjacent band on n78",
-      "expectedClauseId": "38.101-1#6.5.3",
+      "expectedClauseId": "38.101-1#6.5.3.0",
       "stratum": "NR-RF",
       "difficulty": "hard"
     },
     {
       "qid": 43,
       "query": "FR2 millimeter wave UE peak transmit power test failing",
-      "expectedClauseId": "38.101-2#6.2.1",
+      "expectedClauseId": "38.101-2#6.2.1.0",
       "stratum": "NR-RF",
       "difficulty": "easy"
     },
-
     {
       "qid": 50,
       "query": "RRCConnectionReconfiguration with mobilityControlInfo triggers handover that never completes",
-      "expectedClauseId": "36.331#5.3.5",
+      "expectedClauseId": "36.331#5.3.5.1",
       "stratum": "LTE-RRC",
       "difficulty": "easy"
     },
     {
       "qid": 51,
       "query": "T310 timer expires and UE does not initiate re-establishment",
-      "expectedClauseId": "36.331#5.3.10",
+      "expectedClauseId": "36.331#5.3.10.0",
       "stratum": "LTE-RRC",
       "difficulty": "easy"
     },
     {
       "qid": 52,
       "query": "radio link failure detection misses N310 out-of-sync indications",
-      "expectedClauseId": "36.331#5.3.10",
+      "expectedClauseId": "36.331#5.3.10.0",
       "stratum": "LTE-RRC",
       "difficulty": "hard"
     },
     {
       "qid": 53,
       "query": "measurement report not sent after entering A3 condition for time-to-trigger",
-      "expectedClauseId": "36.331#5.5.5",
+      "expectedClauseId": "36.331#5.5.5.1",
       "stratum": "LTE-RRC",
       "difficulty": "hard"
     },
-
     {
       "qid": 60,
       "query": "DRX cycle leaves UE awake when on-duration should have ended",
@@ -317,7 +311,6 @@
       "stratum": "LTE-MAC",
       "difficulty": "easy"
     },
-
     {
       "qid": 70,
       "query": "PUCCH format 1 base sequence depends on wrong physical cell identity",
@@ -332,7 +325,6 @@
       "stratum": "LTE-PHY",
       "difficulty": "easy"
     },
-
     {
       "qid": 80,
       "query": "LTE band 28 transmit power lower than spec across full bandwidth",
@@ -343,14 +335,14 @@
     {
       "qid": 81,
       "query": "receiver sensitivity REFSENS test fails at band edge on lab UXM",
-      "expectedClauseId": "36.101#7.3",
+      "expectedClauseId": "36.101#7.3.1",
       "stratum": "LTE-RF",
       "difficulty": "hard"
     },
     {
       "qid": 82,
       "query": "adjacent channel selectivity ACS not meeting spec on band 41 TDD",
-      "expectedClauseId": "36.101#7.5",
+      "expectedClauseId": "36.101#7.5.1",
       "stratum": "LTE-RF",
       "difficulty": "easy"
     }
