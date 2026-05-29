@@ -779,6 +779,58 @@ This schema is the **stable contract** going forward. The SQLite schema, and any
 - **Build-gate rule:** non-zero exit if hybrid MRR@10 is below baseline; target absolute lift ≥ 0.15. Aligns with §9 (>90 % relevance).
 - Rationale: today's golden snippets only validate the parser. Without a retrieval-quality gate, every future upgrade is unfalsifiable.
 
+## ADR-009: Figures as inline SVG/PNG/JPEG (Phase 1 / schemaVersion=3)
+
+**Status:** Implemented in `phase1-figure-svgs` branch (May 2026).
+
+**Decision:** ship every figure that has a "Figure N: caption" paragraph as an
+inline image blob in a new SQLite table. Inline math equations — which Word
+also renders to WMF and which mammoth surfaces as `<img>` — are dropped
+because they aren't figures and the LLM reads them better from the
+surrounding paragraph text.
+
+### Wire format
+
+- New table `figure_images(clause_id TEXT, figure_id TEXT, mime_type TEXT, bytes INTEGER, data BLOB)` with composite PK and FK to `clauses(id)`.
+- WMF/EMF source images → converted to **SVG** via `soffice --headless --convert-to svg` (vector preserved, sharp at any zoom, ~30-40 KB avg).
+- PNG/JPEG source images → passed through unchanged.
+- `figures_json` retains the `figure_id ↔ caption` mapping plus a new `mediaFilename` field that lets the desktop join clause data back to image bytes.
+- `meta.totalFigureImages` carries the row count for sanity-checking at load time.
+- `meta.schemaVersion = "3"` — additive over v2 (older desktops ignore the new table and the new `mediaFilename` field, keep working on text-only).
+
+### Caption-pairing heuristic
+
+3GPP layout convention places the image paragraph **immediately before** its `Figure N: caption` paragraph. We scan ± 3 paragraphs around each caption in the mammoth HTML and pair the nearest unclaimed `<img data-media-filename="…">`. Pairing is one-to-one; each image is consumed by at most one caption.
+
+Measured pairing rate on representative specs:
+- 38.211 (NR PHY layer): 2/2 = 100 %
+- 38.213 (NR PHY procedures): 0/0 captions (procedures-only spec, no figures)
+- 38.331 (NR RRC): 50/56 = 89 %
+
+The remaining ~10 % of unpaired captions on figure-heavy specs are usually figures spanning > 3 paragraphs from their caption (e.g. a figure followed by a paragraph of normative prose and *then* the caption). Captured as a known gap.
+
+### Storage cost
+
+Measured on 3 specs (38.211 + 38.213 + 38.331): 51 figures × avg 36.8 KB = **1.9 MB** SQLite blobs.
+
+Extrapolated to all 36 specs at the v2 corpus's 1 092 total figures: **~40-60 MB of figure blobs** added to the shipped artifact, comfortably under the 100 MB headroom budgeted at v2 design time. Vector SVG compresses well; the gzipped published artifact grows roughly half that.
+
+### Orphan cleanup
+
+mammoth emits ~600-1 000 inline-equation WMFs per spec that look like images but are equations. The parse stage walks every clause's `figures[].mediaFilename` to build the **referenced-media set**, then unlinks every other file in the spec's `dist/media/<spec>/` directory before invoking libreoffice. This:
+1. Skips 1 000+ wasteful WMF→SVG conversions per spec (~25 s saved).
+2. Keeps `dist/media/` small.
+3. Avoids bloating `figure_images` with table-cell icons / page-header logos / equation renderings.
+
+### Desktop integration (separate change)
+
+Phase 1 is corpus-side only. The desktop's `SpecDrawer` (which renders `View clause` content) needs a follow-up patch to:
+1. Read `figure_images` for the open clause's `figures[].figure_id`s.
+2. Inline render the SVG (browser handles it natively via `<img src="data:image/svg+xml;base64,…">` or `dangerouslySetInnerHTML` on the SVG XML).
+3. Pass the same blobs to the LLM triage path as native vision content blocks when the cited clause has paired images.
+
+Both fronts are independent — corpus can ship the new SQLite without breaking older desktops (which gracefully ignore the new column and new table).
+
 ## Out of scope for v2 (explicit non-goals)
 
 - Cross-encoder reranking stage (bge-reranker) — deferred to v3.

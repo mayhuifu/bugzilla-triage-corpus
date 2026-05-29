@@ -53,8 +53,20 @@ const IN_PARENT_EMB = path.join(DIST_DIR, "parents-with-vec.jsonl");
 const IN_ACRONYMS = path.join(__dirname, "acronyms.json");
 const IN_EVAL_QUERIES = path.join(__dirname, "eval-queries.json");
 const OUT_SQLITE = path.join(OUT_DIR, "corpus.sqlite");
+// Phase 1 (rel17-v4): figure images live in `dist/media/<spec>/`.
+// 03-index.ts walks every clause's figures[] array, opens any
+// referenced media file, and writes the bytes into `figure_images`
+// as a BLOB. The desktop's SpecDrawer reads the blob and renders the
+// SVG/PNG/JPEG inline; the LLM triage path passes them as vision
+// content blocks when the cited clause has images.
+const IN_MEDIA_DIR = path.join(DIST_DIR, "media");
 
-const SCHEMA_VERSION = "2";
+// Schema v3 is purely additive over v2: the only new table is
+// `figure_images`. Older desktop builds that hard-coded v2 reads will
+// IGNORE the new table and still work — the FTS, vec, parent_vec,
+// acronyms, eval_queries surfaces are unchanged. Bumping the version
+// lets v3-aware desktops opt INTO rendering the figures.
+const SCHEMA_VERSION = "3";
 const EMBED_MODEL = process.env.EMBED_MODEL ?? "BAAI/bge-m3";
 const EMBED_DTYPE = "float16";
 
@@ -236,6 +248,27 @@ async function main() {
       stratum            TEXT,
       difficulty         TEXT
     );
+
+    -- Phase 1 (schemaVersion=3): figure-image blobs. One row per
+    -- (clause_id, figure_id) where the figure had an associated media
+    -- file. clauses.figures_json still carries the figure_id ↔ caption
+    -- mapping; the image bytes live here so the FTS payload doesn't
+    -- swell with binary blobs.
+    --
+    -- mime_type is the canonical IANA form ("image/svg+xml",
+    -- "image/png", "image/jpeg", "image/gif"). The desktop reads this
+    -- to pick the right <img> rendering path and the right vision-
+    -- content-block media_type when passing the bytes to the model.
+    CREATE TABLE figure_images (
+      clause_id  TEXT NOT NULL,
+      figure_id  TEXT NOT NULL,
+      mime_type  TEXT NOT NULL,
+      bytes      INTEGER NOT NULL,
+      data       BLOB NOT NULL,
+      PRIMARY KEY (clause_id, figure_id),
+      FOREIGN KEY (clause_id) REFERENCES clauses(id)
+    );
+    CREATE INDEX idx_figure_images_clause ON figure_images(clause_id);
   `);
 
   if (hasVec) {
@@ -286,6 +319,69 @@ async function main() {
   });
   txClauses(rows);
   log(`✓ inserted ${rows.length} clauses`);
+
+  // ── Insert figure-image blobs (Phase 1) ────────────────────
+  // Each clause's figures[] is already in clauses.figures_json. We
+  // additionally read the on-disk media file referenced by
+  // figures[].mediaFilename, and stash the raw bytes in
+  // `figure_images` with the canonical IANA mime type. Files that
+  // failed to convert (no on-disk match) and figures without any
+  // associated image are silently skipped — the figure caption
+  // still lives in figures_json, and the desktop falls back to a
+  // "caption only" rendering for those.
+  let figImgInserted = 0;
+  let figImgMissing = 0;
+  let figImgBytesTotal = 0;
+  const insertFigImg = db.prepare(`
+    INSERT OR IGNORE INTO figure_images (clause_id, figure_id, mime_type, bytes, data)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const txFigImgs = db.transaction(() => {
+    for (const r of rows) {
+      const figs = (r.figures ?? []) as Array<{
+        id?: string;
+        mediaFilename?: string;
+      }>;
+      for (const fig of figs) {
+        if (!fig.mediaFilename || !fig.id) continue;
+        // Path: dist/media/<spec>/<filename>. We pull the spec out of
+        // r.spec — note r.spec is "TS 38.211" (carries the "TS"
+        // prefix); strip it to get the plain spec number used by
+        // 02-parse.ts when it builds the media subdir.
+        const specPlain = String(r.spec || "").replace(/^TS\s+/i, "").trim();
+        const mediaPath = path.join(IN_MEDIA_DIR, specPlain, fig.mediaFilename);
+        let buf: Buffer;
+        try {
+          buf = fsSync.readFileSync(mediaPath);
+        } catch {
+          figImgMissing++;
+          continue;
+        }
+        const ext = path.extname(fig.mediaFilename).slice(1).toLowerCase();
+        const mime =
+          ext === "svg" ? "image/svg+xml" :
+          ext === "png" ? "image/png" :
+          ext === "jpeg" || ext === "jpg" ? "image/jpeg" :
+          ext === "gif" ? "image/gif" :
+          ext === "webp" ? "image/webp" :
+          "application/octet-stream";
+        insertFigImg.run(r.id, fig.id, mime, buf.byteLength, buf);
+        figImgInserted++;
+        figImgBytesTotal += buf.byteLength;
+      }
+    }
+  });
+  txFigImgs();
+  if (figImgInserted > 0 || figImgMissing > 0) {
+    log(
+      `✓ inserted ${figImgInserted} figure image(s) (` +
+      `${(figImgBytesTotal / 1024 / 1024).toFixed(1)} MB${
+        figImgMissing > 0 ? `, ${figImgMissing} missing` : ""
+      })`,
+    );
+  } else {
+    log("no figure images on disk (skipped)");
+  }
 
   // ── Insert vectors ────────────────────────────────────────
   if (hasVec) {
@@ -373,6 +469,7 @@ async function main() {
   meta.run("builtAt", report.builtAt);
   meta.run("specCount", String(report.specs.length));
   meta.run("totalClauses", String(rows.length));
+  meta.run("totalFigureImages", String(figImgInserted));
   meta.run("schemaVersion", hasVec ? SCHEMA_VERSION : `${SCHEMA_VERSION}-no-vec`);
   if (hasVec) {
     meta.run("embeddingModel", EMBED_MODEL);
