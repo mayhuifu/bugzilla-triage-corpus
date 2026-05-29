@@ -37,6 +37,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import mammoth from "mammoth";
+import { mimeToExt, convertVectorMedia, sanitizeSvg } from "./media-utils.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
@@ -46,6 +47,10 @@ const FETCH_MANIFEST = path.join(RAW_DIR, "fetch-manifest.json");
 const OUT_CLAUSES_JSON = path.join(DIST_DIR, "clauses.json");
 const OUT_CLAUSES_JSONL = path.join(DIST_DIR, "clauses.jsonl");
 const OUT_REPORT = path.join(DIST_DIR, "parse-report.json");
+// Phase 1: figure images live here under per-spec subdirs:
+// `dist/media/<spec>/<mediaId>.{svg,png,jpeg,gif}`. 03-index.ts blob-
+// ingests them into the `figure_images` SQLite table.
+const MEDIA_DIR = path.join(DIST_DIR, "media");
 
 const log = (...args: unknown[]) => console.log("[parse]", ...args);
 const warn = (...args: unknown[]) => console.warn("[parse] ⚠", ...args);
@@ -105,6 +110,12 @@ interface ExtractedTable {
 interface ExtractedFigure {
   id: string;
   caption: string;
+  /** Phase 1 (figures-as-SVG): the media file on disk that renders
+   *  this figure. Empty when the figure caption appears in the DOCX
+   *  but the actual image lives further away than our look-back/
+   *  look-ahead window — common for figures whose caption was
+   *  reused as a cross-reference somewhere else in the text. */
+  mediaFilename?: string;
 }
 
 interface ClauseRow {
@@ -268,17 +279,83 @@ function extractTablesAndFigures(
   // ── Figures ──
   // Figure captions live as plain paragraphs; the image may or may
   // not be present in the DOCX. We capture the caption either way.
+  //
+  // Phase 1: each `<img data-media-filename="...">` placeholder (emitted
+  // by mammoth's convertImage callback in parseSpec) gets paired with
+  // the nearest "Figure N:" caption. 3GPP convention: the image
+  // paragraph appears IMMEDIATELY BEFORE the caption paragraph
+  // ("Figure 5.2.1-1: Resource grid"). Some specs invert this — image
+  // after caption — so we accept both within a small look-window.
+  // Pairing is one-to-one: each image is consumed by the first
+  // caption that matches it, preventing the same SVG from being
+  // claimed by two figures.
   const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi;
   let p: RegExpExecArray | null;
+
+  // First pass — collect every paragraph with its byte offset + parsed
+  // content so we can do positional pairing in pass two.
+  interface ParaInfo {
+    start: number;        // byte offset in bodyHtml
+    text: string;         // stripped text
+    mediaFilenames: string[]; // filenames extracted from `<img data-media-filename="...">`
+    captionMatch: RegExpMatchArray | null;
+  }
+  const paras: ParaInfo[] = [];
   while ((p = pRe.exec(bodyHtml)) !== null) {
-    const t = stripTags(p[1]);
-    const fm = t.match(FIGURE_CAPTION_RE);
-    if (fm) {
-      figures.push({
-        id: `${clauseId}/Figure-${fm[1]}`,
-        caption: fm[2].trim(),
-      });
+    const rawInner = p[1];
+    const text = stripTags(rawInner);
+    // Pull out every image media filename in this paragraph. Multiple
+    // images per paragraph is unusual but possible (e.g. side-by-side
+    // diagrams sharing one caption); pairing logic below uses the
+    // first one.
+    const mediaFilenames: string[] = [];
+    const imgRe = /<img\b[^>]*data-media-filename=["']([^"']+)["'][^>]*\/?>/gi;
+    let im: RegExpExecArray | null;
+    while ((im = imgRe.exec(rawInner)) !== null) {
+      mediaFilenames.push(im[1]);
     }
+    paras.push({
+      start: p.index,
+      text,
+      mediaFilenames,
+      captionMatch: text.match(FIGURE_CAPTION_RE),
+    });
+  }
+
+  // Second pass — for each captioned paragraph, find the closest
+  // image-bearing paragraph within ± 3 paragraphs that hasn't been
+  // claimed yet. Bias toward the immediately preceding paragraph
+  // (3GPP standard layout), then look ahead.
+  const claimed = new Set<string>();
+  for (let i = 0; i < paras.length; i++) {
+    const para = paras[i];
+    if (!para.captionMatch) continue;
+    const fm = para.captionMatch;
+    let pickedFilename: string | undefined;
+    // Search radius — wide enough to catch figures with a blank
+    // paragraph or a small note between the image and its caption,
+    // tight enough not to claim an unrelated diagram earlier in the
+    // clause.
+    for (const dist of [1, 2, 3, -1, -2, -3, 0]) {
+      const idx = i + dist;
+      if (idx < 0 || idx >= paras.length) continue;
+      // dist=0 = image and caption in the SAME paragraph, which 3GPP
+      // does occasionally with inline equations + a caption suffix.
+      const candidate = paras[idx];
+      for (const fn of candidate.mediaFilenames) {
+        if (!claimed.has(fn)) {
+          pickedFilename = fn;
+          claimed.add(fn);
+          break;
+        }
+      }
+      if (pickedFilename) break;
+    }
+    figures.push({
+      id: `${clauseId}/Figure-${fm[1]}`,
+      caption: fm[2].trim(),
+      mediaFilename: pickedFilename,
+    });
   }
 
   return { tables, figures };
@@ -419,13 +496,54 @@ async function parseSpec(spec: FetchedSpec): Promise<{ rows: ClauseRow[]; warnin
   }
   log(`parsing ${spec.spec} (${spec.parts.length} part${spec.parts.length > 1 ? "s" : ""})`);
 
+  // Phase 1: every embedded figure (WMF/EMF/PNG/JPEG) lands here. We
+  // pass a `convertImage` callback to mammoth that writes the raw
+  // bytes to this dir under a stable `<spec>-image-<counter>.<ext>`
+  // filename, then returns a tiny `<img data-media-filename="...">`
+  // placeholder in the HTML (no base64 → no HTML bloat). The figure
+  // extractor below pairs each placeholder with its nearest
+  // "Figure N:" caption.
+  const specMediaDir = path.join(MEDIA_DIR, spec.spec);
+  await fs.mkdir(specMediaDir, { recursive: true });
+  // Wipe any media left behind from a previous build of this spec —
+  // counter restarts at 1 each run, so stale files would otherwise
+  // become orphans that 03-index.ts might pick up.
+  for (const existing of await fs.readdir(specMediaDir)) {
+    await fs.unlink(path.join(specMediaDir, existing)).catch(() => {});
+  }
+
+  let mediaCounter = 0;
+  const captureImage = mammoth.images.imgElement(async (image) => {
+    mediaCounter++;
+    const ext = mimeToExt(image.contentType || "");
+    // Files we don't recognise (.bin) get a placeholder src but no
+    // on-disk write — the figure-extractor will treat it as "no
+    // media available" and just keep the caption.
+    if (ext === "bin") {
+      return { src: "", "data-media-filename": "" };
+    }
+    const filename = `${spec.spec}-image-${mediaCounter}.${ext}`;
+    const outPath = path.join(specMediaDir, filename);
+    const buffer = await image.read();
+    await fs.writeFile(outPath, buffer);
+    return {
+      // mammoth requires `src` — we give it a stable token that the
+      // figure extractor can find via the same `media:` scheme. The
+      // browser never sees this HTML so the URL doesn't have to
+      // resolve; only the data-* attribute below matters downstream.
+      src: `media:${filename}`,
+      "data-media-filename": filename,
+      alt: filename,
+    };
+  });
+
   let combinedHtml = "";
   const conversionWarnings: string[] = [];
   for (const partName of spec.parts) {
     const partPath = path.join(RAW_DIR, partName);
     const { value: html, messages } = await mammoth.convertToHtml(
       { path: partPath },
-      { styleMap: STYLE_MAP },
+      { styleMap: STYLE_MAP, convertImage: captureImage },
     );
     combinedHtml += html + "\n";
     for (const m of messages) {
@@ -443,6 +561,70 @@ async function parseSpec(spec: FetchedSpec): Promise<{ rows: ClauseRow[]; warnin
     };
   }
   const { rows, warnings } = buildLeafClauses(spec, blocks);
+
+  // ── Drop unreferenced media before conversion ────────────────
+  // mammoth's convertImage callback saves EVERY embedded image —
+  // including the ~1000 inline math equations that Word renders to
+  // WMF (e.g. 38.211 has 627 WMF + 2 EMF, of which only 2 are
+  // captioned "Figure N:" diagrams). We don't want to convert,
+  // store, or ship those — they're equations, not figures, and the
+  // LLM reads them better from the surrounding text anyway.
+  //
+  // Walk every clause's figures[].mediaFilename to collect the set
+  // of "referenced" files, then unlink everything else in the spec's
+  // media dir. The conversion step (next) then only processes the
+  // small captioned subset.
+  const referenced = new Set<string>();
+  for (const r of rows) {
+    for (const fig of r.figures) {
+      if (fig.mediaFilename) referenced.add(fig.mediaFilename);
+    }
+  }
+  const beforeFiles = await fs.readdir(specMediaDir);
+  let unrefDeleted = 0;
+  for (const f of beforeFiles) {
+    if (!referenced.has(f)) {
+      await fs.unlink(path.join(specMediaDir, f)).catch(() => {});
+      unrefDeleted++;
+    }
+  }
+  if (unrefDeleted > 0) {
+    log(
+      `  ${spec.spec}: kept ${referenced.size} caption-paired media file(s), ` +
+      `dropped ${unrefDeleted} unreferenced (mostly inline equations)`,
+    );
+  }
+
+  // Batch-convert vector media (WMF/EMF) → SVG via libreoffice. Done
+  // once per spec so the JVM startup cost is amortised across the
+  // spec's full figure set. PNG/JPEG were already passed through
+  // as-is by the convertImage callback above. After the orphan-
+  // cleanup above, this only processes the referenced subset.
+  const conv = await convertVectorMedia(specMediaDir);
+  if (conv.failed > 0) {
+    warnings.push(`vector→SVG: ${conv.converted} ok, ${conv.failed} failed`);
+  } else if (conv.converted > 0) {
+    log(`  ${spec.spec}: converted ${conv.converted} vector figure(s) to SVG`);
+  }
+  // Light sanitisation pass over the SVGs to drop libreoffice's
+  // occasional file:// font references that would break the desktop's
+  // in-browser render.
+  for (const f of await fs.readdir(specMediaDir)) {
+    if (f.endsWith(".svg")) await sanitizeSvg(path.join(specMediaDir, f));
+  }
+
+  // After conversion, the figure records still reference the original
+  // .wmf/.emf filenames. Rewrite those to the .svg files we just
+  // produced (the source files have been unlinked by convertVectorMedia).
+  for (const row of rows) {
+    for (const fig of row.figures) {
+      if (!fig.mediaFilename) continue;
+      if (/\.(wmf|emf)$/i.test(fig.mediaFilename)) {
+        fig.mediaFilename = fig.mediaFilename.replace(/\.(wmf|emf)$/i, ".svg");
+      }
+    }
+  }
+
   return { rows, warnings: [...warnings, ...conversionWarnings] };
 }
 
