@@ -37,26 +37,40 @@
 4. `gh auth status` OK (publish). LibreOffice still needed by 01-fetch for the
    legacy 38.201 `.doc` upgrade (not for figures anymore).
 
+## VLM captioning is OPTIONAL (read this first)
+
+The 3GPP `Figure N:` caption AND the prose around the figure are already in the
+clause `text` (→ FTS5 + embeddings), so **figures are already searchable by their
+spec caption + context with NO VLM** (verified: `38.304#5.2.2` text contains
+"Figure 5.2.2-1 shows the states and state transitions…"). VLM captions only add
+recall for *purely visual* content the label/prose omits — an unproven,
+incremental benefit. **Default: build rel17-v6 spec-caption-only (no API key, no
+cost).** Enable VLM later only if the figure-table eval stratum shows a gap
+(set `ANTHROPIC_API_KEY`, or pre-supply captions via `dist/caption-overrides.json`
+keyed by figure id — the "Claude Code as VLM" path).
+
 ## Build
 ```bash
 cd bugzilla-triage-corpus
 export DOCLING_PYTHON=$PWD/.venv-docling/bin/python
-export EMBED_MODEL=BAAI/bge-small-en-v1.5
-export CAPTION_MODEL=claude-3-5-sonnet-latest
+export EMBED_MODEL=BAAI/bge-small-en-v1.5   # MUST match the desktop's bundled embedder
 
 # raw/ already fetched? skip fetch. Otherwise: npm run fetch
 npm run parse          # ~1hr+ — big RF specs (36.300 10MB, 36.133, 38.101-1) are slow
-CAPTION_BUDGET=20 npm run caption   # TRIAL first: caption 20 figures, eyeball quality + cost
-npm run caption        # full run: 1148 figures (cached by image hash; re-runs cheap)
-npm run embed          # bge-small over all clauses (captions now in text → embedded)
+npm run caption        # no-op without ANTHROPIC_API_KEY/overrides → spec-caption-only (default)
+npm run embed          # bge-small over all clauses (spec captions already in text → embedded)
 npm run index          # schema 4 corpus.sqlite (+ figure_images blobs)
-npm run eval           # gate: figure/table-answer stratum recall should rise
+npm run eval           # gate: compare figure/table-answer stratum vs rel17-v5
 ```
-Tip: validate a subset first — `SPEC_FILTER=38.215,38.304 npm run parse` (merges
-into existing output; `02-parse.ts` supports it).
+Or just `npm run build` (chains all of the above). To A/B VLM captions later:
+`CAPTION_BUDGET=20 ANTHROPIC_API_KEY=… npm run caption` (trial 20, eyeball
+quality), then re-`embed`/`index`/`eval` and keep them only if the stratum rises.
+Tip: validate a subset first — `SPEC_FILTER=38.215,38.304 npm run parse`.
 
 ## Verify before publish
-- `meta.schemaVersion = "4"`, `meta.parser = "docling"`, `meta.vlmCaptionModel` set.
+- `meta.schemaVersion = "4"`, `meta.parser = "docling"`, `meta.embeddingModel =
+  "BAAI/bge-small-en-v1.5"` (NOT bge-m3 — else desktop drops to BM25).
+  `meta.vlmCaptionModel` only present if you opted into VLM (optional).
 - Goldens pass in `npm run index` (update `golden-clauses.json` only if a snippet
   legitimately moved — Docling text differs slightly from mammoth).
 - Clause counts per spec sane vs rel17-v5 parse-report (esp. test specs — Docling

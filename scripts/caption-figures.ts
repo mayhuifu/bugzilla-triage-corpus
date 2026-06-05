@@ -37,6 +37,9 @@ const CLAUSES_JSON = path.join(DIST_DIR, "clauses.json");
 const CLAUSES_JSONL = path.join(DIST_DIR, "clauses.jsonl");
 const CACHE_PATH = path.join(DIST_DIR, "caption-cache.json");
 const META_PATH = path.join(DIST_DIR, "caption-meta.json");
+// Pre-supplied captions keyed by figure id (e.g. authored by Claude Code acting
+// as the VLM when the API is unreachable). Applied without an API call.
+const OVERRIDES_PATH = path.join(DIST_DIR, "caption-overrides.json");
 
 const MODEL = process.env.CAPTION_MODEL || "claude-3-5-sonnet-latest";
 const BUDGET = Number(process.env.CAPTION_BUDGET) || Infinity;
@@ -113,46 +116,52 @@ async function main() {
   }
   log(`${jobs.length} captioned figure image(s) across ${rows.length} clause(s)`);
 
-  if (!API_KEY) {
-    warn("ANTHROPIC_API_KEY not set — skipping VLM captioning (corpus stays valid schema-4, no captions).");
-    await fs.writeFile(META_PATH, JSON.stringify({ model: null, captioned: 0, skipped: jobs.length, builtAt: new Date().toISOString() }, null, 2));
-    return;
-  }
-
   // Cache by image SHA-256 so re-runs only caption new images.
   const cache: Record<string, string> = await readJsonOptional(CACHE_PATH) ?? {};
-  let captioned = 0, fromCache = 0, failed = 0, budgetLeft = BUDGET;
-
-  // Build a worklist of unique (hash → job representative) plus all jobs to apply.
   const hashOf = (p: string) => crypto.createHash("sha256").update(fsSync.readFileSync(p)).digest("hex");
   const jobHash = new Map<Job, string>();
   for (const j of jobs) jobHash.set(j, hashOf(j.imgPath));
 
-  // Caption unique uncached hashes with bounded concurrency.
-  const uncached = [...new Set(jobs.filter(j => !(jobHash.get(j)! in cache)).map(j => jobHash.get(j)!))];
-  log(`${uncached.length} new image hash(es) to caption (model=${MODEL}, concurrency=${CONCURRENCY}, budget=${BUDGET})`);
+  // Pre-supplied captions (dist/caption-overrides.json, keyed by figure id) take
+  // priority and need NO API call — this lets Claude Code (or any source) act as
+  // the VLM when api.anthropic.com is unreachable. Merge them into the cache.
+  const overrides: Record<string, string> = await readJsonOptional(OVERRIDES_PATH) ?? {};
+  let fromOverride = 0;
+  for (const j of jobs) {
+    const h = jobHash.get(j)!;
+    if (overrides[j.fig.id] && !(h in cache)) { cache[h] = overrides[j.fig.id]; fromOverride++; }
+  }
+  if (fromOverride) log(`applied ${fromOverride} pre-supplied caption override(s) (no API)`);
+
+  let captioned = 0, fromCache = 0, failed = 0, budgetLeft = BUDGET;
   const repByHash = new Map<string, Job>();
   for (const j of jobs) if (!repByHash.has(jobHash.get(j)!)) repByHash.set(jobHash.get(j)!, j);
+  const uncached = [...new Set(jobs.filter(j => !(jobHash.get(j)! in cache)).map(j => jobHash.get(j)!))];
 
-  let idx = 0;
-  async function worker() {
-    while (idx < uncached.length && budgetLeft > 0) {
-      const hash = uncached[idx++];
-      budgetLeft--;
-      const j = repByHash.get(hash)!;
-      const ext = (j.fig.mediaFilename!.split(".").pop() || "png").toLowerCase();
-      try {
-        const b64 = fsSync.readFileSync(j.imgPath).toString("base64");
-        const cap = await captionImage(b64, MIME[ext] || "image/png", { citation: j.row.citation, title: j.row.title, caption: j.fig.caption });
-        if (cap) { cache[hash] = cap; captioned++; }
-        if (captioned % 25 === 0 && captioned) log(`  …${captioned} captioned`);
-      } catch (e) {
-        failed++;
-        if (failed <= 5) warn(`  ${j.fig.id}: ${(e as Error).message}`);
+  if (uncached.length > 0 && !API_KEY) {
+    warn(`${uncached.length} figure(s) lack a pre-supplied caption and ANTHROPIC_API_KEY is unset — leaving those uncaptioned (corpus stays valid schema-4).`);
+  } else if (uncached.length > 0) {
+    log(`captioning ${uncached.length} new image(s) via API (model=${MODEL}, concurrency=${CONCURRENCY}, budget=${BUDGET})`);
+    let idx = 0;
+    const worker = async () => {
+      while (idx < uncached.length && budgetLeft > 0) {
+        const hash = uncached[idx++];
+        budgetLeft--;
+        const j = repByHash.get(hash)!;
+        const ext = (j.fig.mediaFilename!.split(".").pop() || "png").toLowerCase();
+        try {
+          const b64 = fsSync.readFileSync(j.imgPath).toString("base64");
+          const cap = await captionImage(b64, MIME[ext] || "image/png", { citation: j.row.citation, title: j.row.title, caption: j.fig.caption });
+          if (cap) { cache[hash] = cap; captioned++; }
+          if (captioned % 25 === 0 && captioned) log(`  …${captioned} captioned`);
+        } catch (e) {
+          failed++;
+          if (failed <= 5) warn(`  ${j.fig.id}: ${(e as Error).message}`);
+        }
       }
-    }
+    };
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   }
-  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   await fs.writeFile(CACHE_PATH, JSON.stringify(cache, null, 0));
 
   // Apply captions: set vlmCaption on each figure + append to its clause text
@@ -176,9 +185,12 @@ async function main() {
   // Rewrite outputs.
   await fs.writeFile(CLAUSES_JSON, JSON.stringify(rows));
   await fs.writeFile(CLAUSES_JSONL, rows.map(r => JSON.stringify(r)).join("\n") + "\n");
-  await fs.writeFile(META_PATH, JSON.stringify({ model: MODEL, captioned: Object.keys(cache).length, applied: fromCache, failed, builtAt: new Date().toISOString() }, null, 2));
+  const modelStamp = captioned > 0
+    ? (fromOverride > 0 ? `${MODEL}+overrides` : MODEL)
+    : (fromOverride > 0 ? "claude-code-vision (overrides)" : null);
+  await fs.writeFile(META_PATH, JSON.stringify({ model: modelStamp, captioned: Object.keys(cache).length, viaApi: captioned, viaOverride: fromOverride, applied: fromCache, failed, builtAt: new Date().toISOString() }, null, 2));
 
-  log(`✓ captioned ${captioned} new image(s) (${failed} failed); applied to ${fromCache} figure record(s)`);
+  log(`✓ captions: ${captioned} via API, ${fromOverride} via override (${failed} failed); applied to ${fromCache} figure record(s)`);
   log(`  cache: ${Object.keys(cache).length} entries → ${CACHE_PATH}`);
   log(`  rewrote ${CLAUSES_JSON} + ${CLAUSES_JSONL}`);
 }
