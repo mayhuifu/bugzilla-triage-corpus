@@ -66,7 +66,12 @@ const IN_MEDIA_DIR = path.join(DIST_DIR, "media");
 // IGNORE the new table and still work — the FTS, vec, parent_vec,
 // acronyms, eval_queries surfaces are unchanged. Bumping the version
 // lets v3-aware desktops opt INTO rendering the figures.
-const SCHEMA_VERSION = "3";
+// v4 (Phase B / rel17-v6): Docling parser + optional VLM figure captions.
+// Captions ride inside clauses.text (→ FTS5 + embeddings) AND each
+// figures_json entry's `vlmCaption` field (→ desktop display), so no FTS/column
+// restructure is needed — additive over v3. meta records parser + VLM identity.
+const SCHEMA_VERSION = "4";
+const PARSER_NAME = "docling";
 const EMBED_MODEL = process.env.EMBED_MODEL ?? "BAAI/bge-m3";
 const EMBED_DTYPE = "float16";
 
@@ -471,6 +476,18 @@ async function main() {
   meta.run("totalClauses", String(rows.length));
   meta.run("totalFigureImages", String(figImgInserted));
   meta.run("schemaVersion", hasVec ? SCHEMA_VERSION : `${SCHEMA_VERSION}-no-vec`);
+  // v4: parser + VLM-caption identity so the desktop can report provenance and
+  // pick the right figure-rendering / caption-display path.
+  meta.run("parser", PARSER_NAME);
+  {
+    const capMeta = await readJsonOptional<{ model?: string; captioned?: number }>(
+      path.join(DIST_DIR, "caption-meta.json"),
+    );
+    if (capMeta?.model) {
+      meta.run("vlmCaptionModel", capMeta.model);
+      meta.run("vlmCaptionCount", String(capMeta.captioned ?? 0));
+    }
+  }
   if (hasVec) {
     meta.run("embeddingModel", EMBED_MODEL);
     meta.run("embeddingDim", String(dim));

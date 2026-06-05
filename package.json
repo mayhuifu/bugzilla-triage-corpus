@@ -7,11 +7,12 @@
   "scripts": {
     "fetch": "tsx scripts/01-fetch.ts",
     "parse": "tsx scripts/02-parse.ts",
+    "caption": "tsx scripts/caption-figures.ts",
     "embed": "tsx scripts/embed.ts",
     "index": "tsx scripts/03-index.ts",
     "eval": "tsx scripts/05-eval.ts",
     "publish-corpus": "tsx scripts/04-publish.ts",
-    "build": "npm run fetch && npm run parse && npm run embed && npm run index && npm run eval",
+    "build": "npm run fetch && npm run parse && npm run caption && npm run embed && npm run index && npm run eval",
     "dry-run": "DRY_RUN=1 tsx scripts/01-fetch.ts && DRY_RUN=1 tsx scripts/02-parse.ts && tsx scripts/03-index.ts",
     "dev:precision-check": "tsx scripts/dev-precision-check.ts"
   },
