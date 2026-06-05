@@ -1,11 +1,19 @@
 # Phase B (rel17-v6 + desktop v0.5.6) — rebuild & ship runbook
 
-> The Phase B **implementation is complete + validated** (parser swap on a
-> subset; caption script + schema v4 + build wiring exercised). The actual
-> production rebuild + VLM captioning + publish must run on a machine with an
-> Anthropic API key and ~1hr+ of compute — the agent sandbox can't (api.anthropic.com
-> is blocked there, the 35-spec Docling parse is slow, the embed env isn't set up).
-> This is the one-time runbook to finish the ship.
+> The Phase B **implementation is complete + the full pipeline is validated
+> end-to-end** — parse → embed → index was run in the sandbox on a 2-spec subset
+> (38.215 + 38.304) and produced a queryable **schema-4** corpus: 105 clauses,
+> 105 bge-small vectors, parent rollups, a figure-image blob, working vec-KNN +
+> FTS. Only two things can't run in the sandbox: **VLM captioning** (api.anthropic.com
+> blocked + no key) and the **full 35-spec parse** (big RF specs exceed the
+> sandbox's background-job time limit). Both work on a normal machine. This is
+> the one-time runbook to finish the ship.
+>
+> **Footgun fixed (caught by the e2e):** `embed` now writes `dist/embed-meta.json`
+> and `index` reads it for `meta.embeddingModel`, so the stamped model always
+> matches the vectors even if you forget `EMBED_MODEL` on the `index` step. Still
+> `export EMBED_MODEL=BAAI/bge-small-en-v1.5` (below) — belt and suspenders;
+> a wrong value silently drops the desktop to BM25.
 
 ## What changed (committed)
 - `scripts/parse_sidecar.py` — Docling DOCX → element-stream sidecar.

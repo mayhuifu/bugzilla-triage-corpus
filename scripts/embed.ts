@@ -226,6 +226,15 @@ async function main() {
     try { await fs.unlink(tmpOut); } catch { /* ignore */ }
   }
 
+  // Record the model that ACTUALLY produced these vectors so 03-index stamps
+  // meta.embeddingModel correctly regardless of its own env default. The
+  // desktop matches its bundled embedder against meta.embeddingModel — a wrong
+  // value silently drops hybrid → BM25, so this must be authoritative.
+  await fs.writeFile(
+    path.join(DIST_DIR, "embed-meta.json"),
+    JSON.stringify({ model: MODEL, dtype: "float16", builtAt: new Date().toISOString() }, null, 2),
+  );
+
   // ── Stats ────────────────────────────────────────────────────
   const leafBytes = (await fs.stat(OUT_LEAF)).size;
   const parentBytes = (await fs.stat(OUT_PARENT)).size;

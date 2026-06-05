@@ -385,6 +385,8 @@ function buildLeafClauses(
  *  The sidecar writes any figure images into `mediaDir` (named
  *  `<prefix>-image-N.png`) and prints the JSON element stream to stdout; a
  *  one-line summary goes to stderr (surfaced as a log). */
+const SIDECAR_TIMEOUT_MS = Number(process.env.SIDECAR_TIMEOUT_MS) || 1_200_000; // 20 min/part
+
 function runSidecar(docxPath: string, mediaDir: string, prefix: string): Promise<Element[]> {
   return new Promise((resolve, reject) => {
     const proc = spawn(PYTHON, [SIDECAR, docxPath, mediaDir, prefix], {
@@ -392,11 +394,18 @@ function runSidecar(docxPath: string, mediaDir: string, prefix: string): Promise
     });
     let out = "";
     let err = "";
+    // Bound each part so one pathological DOCX can't stall the whole rebuild —
+    // on timeout, kill the child and reject (parseSpec catches → spec warned + skipped).
+    const timer = setTimeout(() => {
+      proc.kill("SIGKILL");
+      reject(new Error(`sidecar timed out after ${SIDECAR_TIMEOUT_MS}ms on ${path.basename(docxPath)}`));
+    }, SIDECAR_TIMEOUT_MS);
     proc.stdout.setEncoding("utf8");
     proc.stdout.on("data", d => { out += d; });
     proc.stderr.on("data", d => { err += d; });
-    proc.on("error", reject);
+    proc.on("error", e => { clearTimeout(timer); reject(e); });
     proc.on("close", code => {
+      clearTimeout(timer);
       const summary = err.split("\n").find(l => l.includes("[sidecar]"));
       if (summary) log(`  ${path.basename(docxPath)}: ${summary.replace("[sidecar] ", "")}`);
       if (code !== 0) {

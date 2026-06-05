@@ -489,7 +489,12 @@ async function main() {
     }
   }
   if (hasVec) {
-    meta.run("embeddingModel", EMBED_MODEL);
+    // Prefer the model the EMBED step actually used (dist/embed-meta.json) over
+    // this script's own env default — otherwise running `index` without
+    // EMBED_MODEL set stamps the wrong model (e.g. bge-m3) while the vectors are
+    // bge-small, and the desktop's embedder-match drops hybrid → BM25.
+    const embMeta = await readJsonOptional<{ model?: string }>(path.join(DIST_DIR, "embed-meta.json"));
+    meta.run("embeddingModel", embMeta?.model ?? EMBED_MODEL);
     meta.run("embeddingDim", String(dim));
     meta.run("embeddingDtype", EMBED_DTYPE);
   }
