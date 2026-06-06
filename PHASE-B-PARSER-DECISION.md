@@ -1,8 +1,19 @@
 # Phase B (v0.5.6) — parser decision + spike results
 
-> **Status:** Decision gate PASSED. Parser chosen, extraction de-risked. Next:
-> rewire `02-parse.ts`. Durable hand-off — survives `/compact`.
-> Plan: `bugzilla-triage-desktop/PLAN-v0.5.6-multimodal-parsing.md`.
+> **Status: SHELVED (2026-06).** The full rel17-v6 Docling build proved Docling
+> is too slow/unreliable at scale: **4 normative specs timed out at 60 min and
+> produced 0 clauses** — `36.331` (LTE RRC), `36.300` (LTE arch), `38.212` (NR
+> coding/DCI), `38.214` (NR PHY procedures) — while `38.523-1` (NR conformance
+> TEST, which we demote anyway) ballooned 930→3804. Net clause count (13,166 vs
+> v5's 12,930) masked the loss. Verdict: **stay on rel17-v5 (mammoth); do NOT
+> publish v6.** The figure-search win was already free in v5 (spec captions in
+> indexed text), so the parser swap had little upside and real downside.
+> If ever revived: needs a **Docling→mammoth per-spec fallback** (on timeout/0
+> clauses, re-run that spec through mammoth) — see the "VERDICT" note at the
+> bottom. The parser-swap code lives on branch `phase-b-docling-parse` (unmerged).
+>
+> _(original spike notes below — Docling's table/figure quality was good; the
+> killer was per-spec runtime on 36.331/36.300/38.212/38.214.)_
 
 ## Decision: **Docling** (not MinerU)
 

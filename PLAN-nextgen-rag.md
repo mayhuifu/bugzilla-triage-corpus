@@ -1,5 +1,42 @@
 # Next-gen 3GPP RAG — plan
 
+> ## SESSION STATUS (2026-06) — read first; survives `/compact`
+>
+> **Phase A (v0.5.5): SHIPPED ✅.** The planned cross-encoder reranker *regressed*
+> top-1 in eval, so it ships DORMANT (`CORPUS_RERANK=1`). The actual win was
+> **conformance-test-spec demotion** (+8.4pp R@1 / +9.8pp MRR@10 on the verified
+> eval set) — desktop v0.5.5, public, corpus unchanged (rel17-v5). Reusable
+> reranker eval at `bugzilla-triage-desktop/scripts/dev-rerank-eval.mjs`; findings
+> in `EVAL-v0.5.5-reranker-findings.md`.
+>
+> **Phase B (v0.5.6): SHELVED ❌.** Docling parser swap built + validated on small
+> specs, but the full rel17-v6 build proved Docling **times out (60 min) on 4
+> normative specs → 0 clauses** (36.331/36.300/38.212/38.214). **Stay on
+> rel17-v5; do NOT publish the broken v6.** Figure-search was already free in v5
+> (spec captions are in the indexed clause text). Code on branch
+> `phase-b-docling-parse` (unmerged). Details: `PHASE-B-PARSER-DECISION.md`.
+>
+> **Phase C (v0.5.7, KG): DEFERRED ⏸ — next focus.** Spike showed a deterministic
+> (no-LLM) KG *regressed* relational retrieval (5/6→4/6) AND hybrid already
+> handles the 3 relational eval queries (no headroom). The full LLM-extracted KG
+> hits the SAME blocker as Phase B's VLM — a build-time LLM, unreachable in the
+> sandbox. **Prerequisite before building anything: a set of HARD relational
+> queries where hybrid demonstrably misses the multi-hop clause** (real engineer
+> questions, not synthetic pairs). Then revisit with selective LLM-typed edges +
+> recall-recovery-only mode. Spike + verdict: `bugzilla-triage-desktop/PHASE-C-KG-FINDINGS.md`,
+> harness `dev-kg-spike.mjs`. Plan: `bugzilla-triage-desktop/PLAN-v0.5.7-knowledge-graph.md`.
+>
+> **Live state:** desktop **v0.5.5** public; corpus default **rel17-v5** (healthy,
+> 12,930 clauses). A broken **rel17-v6** is published on GitHub — desktop ignores
+> it (defaults to v5), but consider deleting that GH release to avoid confusion.
+>
+> **Cross-phase lesson:** every cheap eval-proven win shipped (test-spec demotion);
+> every expensive add-on (reranker, VLM captions, Docling, KG) was correctly gated
+> OUT before sinking cost. The load-bearing dependency for Phase C is the harder
+> eval set, not the KG build.
+
+---
+
 > **Status:** Proposal for discussion. Written after studying HKUDS/RAG-Anything
 > (arXiv 2510.12323) against our current retrieval and the three failure modes
 > the maintainer flagged. Authored to be self-contained.
