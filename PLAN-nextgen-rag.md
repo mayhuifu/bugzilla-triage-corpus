@@ -4,6 +4,24 @@
 > (arXiv 2510.12323) against our current retrieval and the three failure modes
 > the maintainer flagged. Authored to be self-contained.
 
+## SESSION STATUS
+
+**Phase A (reranker):** DEFERRED — regressed older eval; shipped test-spec
+demotion instead. Re-evaluation against the harder relational set (see below)
+is flagged as likely higher-ROI than Phase C KG.
+
+**Phase B (multimodal parse):** shipped (Docling parser, figure extraction,
+VLM captioning optional). rel17-v5 corpus artifact live.
+
+**Phase C (v0.5.7, KG):** DEFERRED — prerequisite hard relational eval is now
+BUILT (2026-06-06). Results: 26 grounded multi-hop queries; 10 HARD; of those
+only 3/26 (~12%) are true recall-misses (KG territory); 7/10 hard cases are
+ranked-low-in-pool (reranker territory, not KG). Relational stratum grew 3→13.
+Verdict: still DEFER the KG — failure mode too rare to justify LLM extraction
+cost; one clean cross-ref hop (qid 103) is insufficient evidence. See
+`HARD-RELATIONAL-EVAL.md` for full results + clause-level recoverability
+assessment. The 3 true-misses (qid 102,103,108) are the permanent KG gate.
+
 ## The question we asked
 
 > "Study RAG-Anything, see if we should switch our 3GPP RAG to it. Current
