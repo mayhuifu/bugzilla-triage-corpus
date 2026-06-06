@@ -488,6 +488,10 @@ async function parseSpec(spec: FetchedSpec): Promise<{ rows: ClauseRow[]; warnin
   return { rows, warnings: [...warnings, ...sidecarWarnings] };
 }
 
+async function fileExists(p: string): Promise<boolean> {
+  try { await fs.access(p); return true; } catch { return false; }
+}
+
 async function main() {
   const manifestRaw = await fs.readFile(FETCH_MANIFEST, "utf8");
   const manifest = JSON.parse(manifestRaw) as { specs: FetchedSpec[] };
@@ -503,6 +507,14 @@ async function main() {
   log(`parsing ${selected.length} spec(s)${filter.length ? ` (filtered: ${filter.join(", ")})` : ""}`);
   log(`using docling sidecar via ${PYTHON}`);
   await fs.mkdir(DIST_DIR, { recursive: true });
+  // Per-spec checkpoint cache → RESUMABLE parse. Each spec's parsed rows are
+  // persisted to dist/parse-cache/<spec>.json the moment it finishes, and
+  // reused on re-run — so a long build can be stopped (Ctrl-C / shutdown) and
+  // restarted, skipping already-parsed specs. Force a fresh parse of a spec by
+  // deleting its cache file, or all with PARSE_FORCE=1.
+  const CKPT_DIR = path.join(DIST_DIR, "parse-cache");
+  await fs.mkdir(CKPT_DIR, { recursive: true });
+  const force = process.env.PARSE_FORCE === "1";
 
   const allRows: ClauseRow[] = [];
   const report: ParseReport = {
@@ -515,8 +527,19 @@ async function main() {
   };
 
   for (const spec of selected) {
+    const ckptPath = path.join(CKPT_DIR, `${spec.spec}.json`);
     try {
-      const { rows, warnings } = await parseSpec(spec);
+      let rows: ClauseRow[];
+      let warnings: string[];
+      let cached = false;
+      if (!force && await fileExists(ckptPath)) {
+        const c = JSON.parse(await fs.readFile(ckptPath, "utf8")) as { rows: ClauseRow[]; warnings: string[] };
+        rows = c.rows; warnings = c.warnings ?? []; cached = true;
+      } else {
+        ({ rows, warnings } = await parseSpec(spec));
+        // Persist immediately so this spec survives a stop/restart.
+        await fs.writeFile(ckptPath, JSON.stringify({ rows, warnings }));
+      }
       allRows.push(...rows);
       const tableCount = rows.reduce((a, r) => a + r.tables.length, 0);
       const figureCount = rows.reduce((a, r) => a + r.figures.length, 0);
@@ -530,7 +553,7 @@ async function main() {
       });
       report.totalTables += tableCount;
       report.totalFigures += figureCount;
-      log(`  ${spec.spec}: ${rows.length} clause(s), ${tableCount} table(s), ${figureCount} figure(s)`);
+      log(`  ${spec.spec}: ${rows.length} clause(s), ${tableCount} table(s), ${figureCount} figure(s)${cached ? "  (cached ↺)" : ""}`);
       if (warnings.length > 0) {
         warn(`  ${spec.spec}: ${warnings.length} warning(s)`);
       }
