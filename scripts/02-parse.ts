@@ -56,6 +56,11 @@ const OUT_REPORT = path.join(DIST_DIR, "parse-report.json");
 // `dist/media/<spec>/<mediaId>.png`. 03-index.ts blob-ingests them into
 // the `figure_images` SQLite table. (v3: always PNG — Docling rasterises.)
 const MEDIA_DIR = path.join(DIST_DIR, "media");
+// Docling conversion cache (per DOCX part) — lets a re-parse skip the slow
+// Docling convert() when the source DOCX is unchanged. Disable with
+// NO_DOCLING_CACHE=1. See parse_sidecar.py for the keying + invalidation.
+const DOCLING_CACHE_DIR = process.env.NO_DOCLING_CACHE === "1"
+  ? "" : path.join(DIST_DIR, "docling-cache");
 
 // The Docling sidecar + the Python interpreter that has docling installed.
 const SIDECAR = path.join(__dirname, "parse_sidecar.py");
@@ -390,7 +395,7 @@ const SIDECAR_TIMEOUT_MS = Number(process.env.SIDECAR_TIMEOUT_MS) || 1_200_000; 
 function runSidecar(docxPath: string, mediaDir: string, prefix: string): Promise<Element[]> {
   return new Promise((resolve, reject) => {
     const proc = spawn(PYTHON, [SIDECAR, docxPath, mediaDir, prefix], {
-      env: { ...process.env, SIDECAR_SUMMARY: "1" },
+      env: { ...process.env, SIDECAR_SUMMARY: "1", DOCLING_CACHE_DIR },
     });
     let out = "";
     let err = "";
@@ -514,6 +519,7 @@ async function main() {
   // deleting its cache file, or all with PARSE_FORCE=1.
   const CKPT_DIR = path.join(DIST_DIR, "parse-cache");
   await fs.mkdir(CKPT_DIR, { recursive: true });
+  if (DOCLING_CACHE_DIR) await fs.mkdir(DOCLING_CACHE_DIR, { recursive: true });
   const force = process.env.PARSE_FORCE === "1";
 
   const allRows: ClauseRow[] = [];
