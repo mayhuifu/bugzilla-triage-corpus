@@ -390,7 +390,10 @@ function buildLeafClauses(
  *  The sidecar writes any figure images into `mediaDir` (named
  *  `<prefix>-image-N.png`) and prints the JSON element stream to stdout; a
  *  one-line summary goes to stderr (surfaced as a log). */
-const SIDECAR_TIMEOUT_MS = Number(process.env.SIDECAR_TIMEOUT_MS) || 1_200_000; // 20 min/part
+// 60 min/part default — the RRM specs (36.133 / 38.133) have thousands of tables
+// and observed ~35 min/part under Docling, so 20 min would wrongly kill them.
+// Override with SIDECAR_TIMEOUT_MS for slower hosts.
+const SIDECAR_TIMEOUT_MS = Number(process.env.SIDECAR_TIMEOUT_MS) || 3_600_000;
 
 function runSidecar(docxPath: string, mediaDir: string, prefix: string): Promise<Element[]> {
   return new Promise((resolve, reject) => {
