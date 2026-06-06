@@ -750,6 +750,153 @@
       "difficulty": "easy",
       "mode": "normal",
       "source": "curated-v0.5.5"
+    },
+    {
+      "qid": 100,
+      "query": "When the sCellDeactivationTimer expires the UE continues to send CSI reports and SRS on the deactivated secondary cell.",
+      "expectedClauseId": "38.321#5.9",
+      "acceptableClauseIds": [
+        "38.321#5.9"
+      ],
+      "stratum": "NR-MAC",
+      "difficulty": "hard",
+      "mode": "relational",
+      "feature": "relational",
+      "source": "curated-v0.5.7",
+      "rationale": "Surface CSI/SRS point at PHY reporting; the deactivation-stops-CSI/SRS/PDCCH rule is in MAC SCell activation/deactivation."
+    },
+    {
+      "qid": 101,
+      "query": "On RRC reconfiguration with sync the PDCP entity is re-established but the corresponding RLC entity keeps its old state variables and buffered PDUs.",
+      "expectedClauseId": "38.322#5.1.2",
+      "acceptableClauseIds": [
+        "38.322#5.1.2",
+        "38.323#5.1.2"
+      ],
+      "stratum": "NR-L2",
+      "difficulty": "hard",
+      "mode": "relational",
+      "feature": "relational",
+      "source": "curated-v0.5.7",
+      "rationale": "Surface PDCP re-establishment (38.323#5.1.2); the answer about RLC discarding state on re-establishment is in 38.322#5.1.2."
+    },
+    {
+      "qid": 102,
+      "query": "Measurement event A3 entry condition is met and the report is sent, but the UE never applies the handover command to the target cell.",
+      "expectedClauseId": "38.331#5.3.5.1",
+      "acceptableClauseIds": [
+        "38.331#5.3.5.1"
+      ],
+      "stratum": "NR-RRC",
+      "difficulty": "hard",
+      "mode": "relational",
+      "feature": "relational",
+      "source": "curated-v0.5.7",
+      "rationale": "Surface event-A3/measurement-report (38.331#5.5.4); the handover-execution behaviour is reconfiguration-with-sync (38.331#5.3.5.1)."
+    },
+    {
+      "qid": 103,
+      "query": "RRCResume fails because the UE cannot comply with the received configuration, yet the UE does not fall back to establishing a new RRC connection.",
+      "expectedClauseId": "38.331#5.3.13.5",
+      "acceptableClauseIds": [
+        "38.331#5.3.13.5"
+      ],
+      "stratum": "NR-RRC",
+      "difficulty": "hard",
+      "mode": "relational",
+      "feature": "relational",
+      "source": "curated-v0.5.7",
+      "rationale": "Surface RRCResume reception (38.331#5.3.13.4); the failure-handling/fallback rule is 38.331#5.3.13.5."
+    },
+    {
+      "qid": 107,
+      "query": "The UE decodes a DCI scrambled with the RA-RNTI inside the RAR window but never stops ra-ResponseWindow or processes the contained backoff and uplink grant.",
+      "expectedClauseId": "38.321#5.1.4",
+      "acceptableClauseIds": [
+        "38.321#5.1.4",
+        "38.213#8.2"
+      ],
+      "stratum": "NR-MAC",
+      "difficulty": "hard",
+      "mode": "relational",
+      "feature": "relational",
+      "source": "curated-v0.5.7",
+      "rationale": "Surface RA-RNTI/RAR-window/DCI points at the PHY RAR detection procedure (38.213#8.2); the MAC handling of ra-ResponseWindow, backoff and RAR contents is Random Access Response reception (38.321#5.1.4)."
+    },
+    {
+      "qid": 108,
+      "query": "The ra-ContentionResolutionTimer expires without a successful contention resolution, but the UE does not go back to pick a new random access preamble and resource.",
+      "expectedClauseId": "38.321#5.1.2",
+      "acceptableClauseIds": [
+        "38.321#5.1.2",
+        "38.321#5.1.5"
+      ],
+      "stratum": "NR-MAC",
+      "difficulty": "hard",
+      "mode": "relational",
+      "feature": "relational",
+      "source": "curated-v0.5.7",
+      "rationale": "Surface ra-ContentionResolutionTimer points at Contention Resolution (38.321#5.1.5); the answer that an unsuccessful attempt re-runs preamble/resource selection lives in Random Access Resource selection (38.321#5.1.2)."
+    },
+    {
+      "qid": 110,
+      "query": "Upper layers request PDCP data recovery on an AM bearer, yet the lower-layer RLC entity is never re-established so the retransmitted PDUs are duplicated on air.",
+      "expectedClauseId": "38.322#5.1.2",
+      "acceptableClauseIds": [
+        "38.322#5.1.2",
+        "38.323#5.5"
+      ],
+      "stratum": "NR-L2",
+      "difficulty": "hard",
+      "mode": "relational",
+      "feature": "relational",
+      "source": "curated-v0.5.7",
+      "rationale": "Surface PDCP-data-recovery points at PDCP data recovery (38.323#5.5); the dependency that RLC must be re-established (discard PDUs/reset state) lives in RLC entity re-establishment (38.322#5.1.2)."
+    },
+    {
+      "qid": 113,
+      "query": "T304 expires during a reconfiguration with sync so handover fails, but the UE does not initiate re-establishment by selecting a suitable cell and sending the reestablishment request.",
+      "expectedClauseId": "38.331#5.3.7.4",
+      "acceptableClauseIds": [
+        "38.331#5.3.7.4",
+        "38.331#5.3.5.8.3"
+      ],
+      "stratum": "NR-RRC",
+      "difficulty": "hard",
+      "mode": "relational",
+      "feature": "relational",
+      "source": "curated-v0.5.7",
+      "rationale": "Surface T304/reconfiguration-with-sync-failure points at the T304-expiry clause (38.331#5.3.5.8.3); the actual reestablishment-request transmission behaviour is in 38.331#5.3.7.4."
+    },
+    {
+      "qid": 114,
+      "query": "A conditional handover candidate's execution condition is satisfied during evaluation, but the UE never applies the stored conditional RRCReconfiguration of the triggered cell.",
+      "expectedClauseId": "38.331#5.3.5.13.5",
+      "acceptableClauseIds": [
+        "38.331#5.3.5.13.5",
+        "38.331#5.3.5.13.4"
+      ],
+      "stratum": "NR-RRC",
+      "difficulty": "hard",
+      "mode": "relational",
+      "feature": "relational",
+      "source": "curated-v0.5.7",
+      "rationale": "Surface evaluation/execution-condition points at conditional reconfiguration evaluation (38.331#5.3.5.13.4); the answer that the stored condRRCReconfig is applied lives in conditional reconfiguration execution (38.331#5.3.5.13.5)."
+    },
+    {
+      "qid": 116,
+      "query": "The physical layer keeps indicating out-of-sync to higher layers past the N310 threshold, but the UE never starts T310 nor declares radio link failure.",
+      "expectedClauseId": "38.331#5.3.10.3",
+      "acceptableClauseIds": [
+        "38.331#5.3.10.3",
+        "38.213#5"
+      ],
+      "stratum": "NR-PHY",
+      "difficulty": "hard",
+      "mode": "relational",
+      "feature": "relational",
+      "source": "curated-v0.5.7",
+      "rationale": "Surface out-of-sync/radio-link-monitoring points at PHY radio link monitoring (38.213#5); the answer that consecutive out-of-sync starts T310 and leads to RLF is RRC RLF detection (38.331#5.3.10.3)."
     }
   ]
 }
