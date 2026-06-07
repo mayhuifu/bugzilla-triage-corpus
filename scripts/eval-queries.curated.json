@@ -1,0 +1,446 @@
+{
+  "schemaVersion": 2,
+  "description": "VERIFIED acceptableClauseIds proposal for scripts/eval-queries.json. Every id below was confirmed against out/corpus.sqlite (schema 3) to (a) exist, (b) be a leaf clause (no descendant clause id LIKE id||'.%'), and (c) be normative (no 38.523-1/36.523-1/38.521-x/36.521-x/38.508-1/36.508 test specs, and no pure Test Parameters/Requirements annexes). `existing` mirrors all 48 queries in eval-queries.json with curated acceptableClauseIds + the report's mode preserved verbatim. `new` adds 15 fresh verified queries. Do not merge into eval-queries.json without review; this is a proposal artifact.",
+  "existing": [
+    {
+      "qid": 1,
+      "acceptableClauseIds": ["38.331#5.3.5.1", "38.331#5.3.5.5.2"],
+      "mode": "top1",
+      "notes": "5.3.5.1 = RRC reconfiguration General (purpose incl. reconfiguration with sync). 5.3.5.5.2 = Reconfiguration with sync, the leaf that actually specifies the UE actions to execute the sync/handover. Both directly answer 'fails to apply reconfiguration with sync after handover trigger'."
+    },
+    {
+      "qid": 2,
+      "acceptableClauseIds": ["38.331#5.3.5.1", "38.331#5.3.5.5.2"],
+      "mode": "recall-miss",
+      "notes": "Same procedure as qid1, intra-freq handover = reconfiguration-with-sync on target SpCell. 5.3.5.5.2 carries the substantive 'execute reconfiguration with sync' steps; 5.3.5.1 is the General stub. Report top10 was dominated by 38.133 test-param/RRM clauses (excluded)."
+    },
+    {
+      "qid": 3,
+      "acceptableClauseIds": ["38.331#5.3.3.4"],
+      "mode": "top1",
+      "notes": "5.3.3.4 = Reception of the RRCSetup by the UE; precisely the clause for an RRCSetup being acted on / ignored after RRCSetupRequest. Single strong answer; siblings (5.3.3.3 = sending RRCSetupRequest) are a different step."
+    },
+    {
+      "qid": 4,
+      "acceptableClauseIds": ["38.331#5.3.3.4"],
+      "mode": "recall-miss",
+      "notes": "'Not transitioning to RRC_CONNECTED after initial access' = failure to act on RRCSetup. 5.3.3.4 (RRCSetup reception sets UE to RRC_CONNECTED) is the normative leaf. 38.300 overview hits in top10 are non-normative descriptions, excluded."
+    },
+    {
+      "qid": 5,
+      "acceptableClauseIds": ["38.331#5.7.3.1", "38.331#5.7.3.2"],
+      "mode": "ranked-low",
+      "notes": "5.7.3.1 = SCG failure information General (purpose). 5.7.3.2 = Initiation, the leaf that defines WHEN the UE must send the SCGFailureInformation report — directly answers 'report missing'. Both normative leaves under the SCG failure procedure."
+    },
+    {
+      "qid": 6,
+      "acceptableClauseIds": ["38.331#5.5.4.1", "38.331#5.5.4.4"],
+      "mode": "recall-miss",
+      "notes": "5.5.4.1 = General measId evaluation (decides when a report is triggered). 5.5.4.4 = Event A3 entering/leaving condition (A3-1). Together they answer 'report not triggered after A3 entering condition'."
+    },
+    {
+      "qid": 7,
+      "acceptableClauseIds": ["38.331#5.5.4.1", "38.331#5.5.4.4"],
+      "mode": "recall-miss",
+      "notes": "Paraphrase of qid6 ('neighbour exceeds threshold but no report'). Same two leaves: A3 entering condition (5.5.4.4) + report-triggering evaluation (5.5.4.1). Report top10 was all 36.133 test clauses, excluded."
+    },
+    {
+      "qid": 8,
+      "acceptableClauseIds": ["38.331#5.3.7.4", "38.331#5.3.7.7"],
+      "mode": "recall-miss",
+      "notes": "5.3.7.4 = sending RRCReestablishmentRequest (the expected). 5.3.7.7 = T301 expiry / selected cell no longer suitable — the leaf that captures re-establishment FAILURE. Both normative; excludes 38.300 RLF overviews and test specs."
+    },
+    {
+      "qid": 10,
+      "acceptableClauseIds": ["38.211#6.3.2.1", "38.211#6.3.2.2.2", "38.211#6.3.2.3.1"],
+      "mode": "recall-miss",
+      "notes": "6.3.2.1 = PUCCH formats General table (expected stub). 6.3.2.2.2 = Cyclic shift hopping (the clause that defines the cyclic shift, incl. PUCCH format 0). 6.3.2.3.1 = PUCCH format 0 sequence generation, which uses that cyclic shift. The cyclic-shift detail (6.3.2.2.2 / 6.3.2.3.1) is the real answer."
+    },
+    {
+      "qid": 11,
+      "acceptableClauseIds": ["38.211#6.3.2.1", "38.211#6.3.2.3.1"],
+      "mode": "recall-miss",
+      "notes": "'HARQ-ACK on a single OFDM symbol' = PUCCH format 0 (length 1-2 symbols, <=2 bits per the 6.3.2.1 format table). 6.3.2.3.1 is the format 0 sequence generation leaf. Both normative PHY leaves."
+    },
+    {
+      "qid": 12,
+      "acceptableClauseIds": ["38.211#6.3.2.4.1"],
+      "mode": "recall-miss",
+      "notes": "6.3.2.4.1 = PUCCH format 3 sequence modulation (BPSK/QPSK -> DFT-s-OFDM). Exact match for 'format 3 DFT-s-OFDM payload mis-modulated'. Single strong answer."
+    },
+    {
+      "qid": 13,
+      "acceptableClauseIds": ["38.211#6.4.1.1.1"],
+      "mode": "top1",
+      "notes": "6.4.1.1.1 = PUSCH DM-RS sequence generation, initialized with scramblingID0/ID1. Exact match for 'wrong scrambling identity'. Single."
+    },
+    {
+      "qid": 14,
+      "acceptableClauseIds": ["38.211#6.4.1.1.1"],
+      "mode": "recall-miss",
+      "notes": "'Uplink reference signal mapping causes channel estimation failure' = PUSCH DM-RS. 6.4.1.1.1 (DM-RS sequence generation) is the closest normative PHY leaf for the UL RS used for channel estimation. Kept single (mapping-to-RE sibling 6.4.1.1.3 is a separate step and was not in scope)."
+    },
+    {
+      "qid": 15,
+      "acceptableClauseIds": ["38.211#7.4.3.1.1"],
+      "mode": "recall-miss",
+      "notes": "7.4.3.1.1 = Mapping of PSS within an SS/PBCH block (SSB time/freq mapping). Best normative leaf for 'SSB transmission timing off'. 38.213#16.1 (sync procedures) is plausible but the mapping/structure leaf is the more specific spec answer."
+    },
+    {
+      "qid": 16,
+      "acceptableClauseIds": ["38.213#10.1.1", "38.211#7.3.2.1"],
+      "mode": "recall-miss",
+      "notes": "LOW-CONFIDENCE / LIKELY MISLABELED. Expected 38.213#10.1.1 in THIS corpus is titled 'Self-carrier and cross-carrier scheduling on the primary cell' and is only about SCell scaling — the clause-10.1 preamble defining search-space candidates/aggregation levels was lost in parse (38.213#10.1 does not exist as a clause). The actual 'aggregation level' definition lives in 38.211#7.3.2.1 (Control-channel element, Table 7.3.2.1-1 'Supported PDCCH aggregation levels'), which is the better answer for 'PDCCH not found at the expected aggregation level'. Both kept; 7.3.2.1 is the substantive one."
+    },
+    {
+      "qid": 17,
+      "acceptableClauseIds": ["38.213#7.1.1"],
+      "mode": "top1",
+      "notes": "7.1.1 = PUSCH UE behaviour, the full PUSCH power formula incl. the open-loop component (P_O + alpha*PL). Single leaf under 7.1. Exact."
+    },
+    {
+      "qid": 18,
+      "acceptableClauseIds": ["38.213#7.1.1"],
+      "mode": "recall-miss",
+      "notes": "Same PUSCH power leaf. The closed-loop TPC accumulation (PUSCH power control adjustment state f_b,f,c) is specified inside 7.1.1. 7.3.1 (SRS) and 7.2.1 (PUCCH) are different channels, excluded. Single."
+    },
+    {
+      "qid": 19,
+      "acceptableClauseIds": ["38.321#5.1.4"],
+      "mode": "ranked-low",
+      "notes": "5.1.4 = Random Access Response reception, which contains ra-ResponseWindow expiry -> preamble retransmission (preambleTransMax) logic. Exact for 'preamble retransmission after no RAR'. Test-spec/38.133 hits in top10 excluded."
+    },
+    {
+      "qid": 20,
+      "acceptableClauseIds": ["38.321#5.4.1"],
+      "mode": "ranked-low",
+      "notes": "5.4.1 = UL Grant reception (handling of a dynamic UL grant addressed to C-RNTI). Exact. 5.4.2.1 (HARQ entity) is the next step; kept single to stay conservative."
+    },
+    {
+      "qid": 21,
+      "acceptableClauseIds": ["38.321#5.4.1"],
+      "mode": "recall-miss",
+      "notes": "'MAC entity ignores uplink scheduling assignment' = UL grant not consumed = 5.4.1 UL Grant reception. Same as qid20 paraphrased. Single."
+    },
+    {
+      "qid": 22,
+      "acceptableClauseIds": ["38.321#5.4.5"],
+      "mode": "ranked-low",
+      "notes": "5.4.5 = Buffer Status Reporting; defines the BSR triggers incl. UL data becoming available for a higher-priority logical channel (Regular BSR). Exact. Single (LTE 36.321#5.4.5 is the cross-RAT sibling, not NR)."
+    },
+    {
+      "qid": 23,
+      "acceptableClauseIds": ["38.321#5.4.5"],
+      "mode": "top1",
+      "notes": "5.4.5 = Buffer Status Reporting; retxBSR-Timer expiry triggers a Regular BSR is specified here. Exact. Single."
+    },
+    {
+      "qid": 24,
+      "acceptableClauseIds": ["38.321#5.4.6"],
+      "mode": "ranked-low",
+      "notes": "5.4.6 = Power Headroom Reporting; phr-Tx-PowerFactorChange / dl-PathlossChange trigger and prohibitPHR-Timer specified here. Exact. Single."
+    },
+    {
+      "qid": 25,
+      "acceptableClauseIds": ["38.321#5.4.3.1.1", "38.321#5.4.3.1.3"],
+      "mode": "ranked-low",
+      "notes": "5.4.3.1.1 = LCP General (priority/PBR config, expected). 5.4.3.1.3 = Allocation of resources, the leaf that defines the actual ordering by decreasing priority when serving logical channels in a grant — the substantive answer to 'wrong order in multiplexing'."
+    },
+    {
+      "qid": 26,
+      "acceptableClauseIds": ["38.321#5.7"],
+      "mode": "ranked-low",
+      "notes": "5.7 = DRX; Active Time / onDurationTimer / drx-InactivityTimer behaviour specified here. Exact for 'DRX active time enters even when no PDCCH'. Single (36.321#5.7 is the LTE sibling)."
+    },
+    {
+      "qid": 27,
+      "acceptableClauseIds": ["38.321#5.15.1"],
+      "mode": "recall-miss",
+      "notes": "5.15.1 = Bandwidth Part operation, Downlink and Uplink; DCI-triggered BWP switching specified here. The switch-delay timing requirement lives in 38.133 (RRM, different layer) so kept single to the MAC procedure. Report top10 was all 38.133 test-param clauses, excluded."
+    },
+    {
+      "qid": 28,
+      "acceptableClauseIds": ["38.321#5.17"],
+      "mode": "ranked-low",
+      "notes": "5.17 = Beam Failure Detection and Recovery; BFI_COUNTER vs beamFailureInstanceMaxCount and triggering of the recovery RA specified here. Exact. Single (38.300#9.2.8 is a non-normative overview)."
+    },
+    {
+      "qid": 29,
+      "acceptableClauseIds": ["38.321#6.1.3.10", "38.321#5.9"],
+      "mode": "ranked-low",
+      "notes": "6.1.3.10 = SCell Activation/Deactivation MAC CE format (expected). 5.9 = Activation/Deactivation of SCells, the PROCEDURE leaf that defines UE behaviour on receiving that MAC CE (the actual reason an SCell 'stays deactivated'). 5.9 is arguably the better answer."
+    },
+    {
+      "qid": 30,
+      "acceptableClauseIds": ["38.300#9.2.3.1"],
+      "mode": "recall-miss",
+      "notes": "38.300#9.2.3.1 (Network controlled mobility Overview) is the expected; it is a non-normative L2/overview clause. Kept as-is (single). CA activation handshake is really a MAC (5.9) + RRM (38.133) topic; left to the original mapping since this stratum is NR-L2/overview. LOW-CONFIDENCE: query maps weakly to its expected clause."
+    },
+    {
+      "qid": 31,
+      "acceptableClauseIds": ["38.300#9.2.3.1"],
+      "mode": "recall-miss",
+      "notes": "Same NR-L2 overview clause as qid30. 'SCell turned on but UE not transmitting' is closer to MAC 38.321#5.9, but to stay within the labeled stratum and be conservative the expected overview clause is kept single. LOW-CONFIDENCE."
+    },
+    {
+      "qid": 32,
+      "acceptableClauseIds": ["38.323#5.11.1", "38.323#5.11.2"],
+      "mode": "ranked-low",
+      "notes": "5.11.1 = Activation/Deactivation of PDCP duplication (expected) — if duplication is not activated the UE sends only on the primary RLC. 5.11.2 = Duplicate PDU discard, the paired leaf for the duplication mechanism. Both normative PDCP leaves."
+    },
+    {
+      "qid": 33,
+      "acceptableClauseIds": ["38.322#5.3.2"],
+      "mode": "top1",
+      "notes": "5.3.2 = RLC AM Retransmission; reaching maxRetxThreshold -> indicate to RRC (the missing 'failure indication') specified here. Exact. Single."
+    },
+    {
+      "qid": 40,
+      "acceptableClauseIds": ["38.101-1#6.2.1"],
+      "mode": "ranked-low",
+      "notes": "6.2.1 = UE maximum output power (FR1 power-class table 6.2.1-1 covering n41) incl. tolerance. Exact for the band-n41 max-power symptom. The FR2 6.2.1.x siblings in top10 are a different power-domain (mmWave), excluded. Single."
+    },
+    {
+      "qid": 41,
+      "acceptableClauseIds": ["38.101-1#6.4.2.0", "38.101-1#6.4.2.1"],
+      "mode": "top1",
+      "notes": "6.4.2.0 = Transmit modulation quality General (expected). 6.4.2.1 = Error Vector Magnitude, the leaf with the actual EVM requirement/limit. Both FR1 normative leaves; 6.4.2.1 is the substantive answer to 'EVM exceeds limit'."
+    },
+    {
+      "qid": 42,
+      "acceptableClauseIds": ["38.101-1#6.5.3.0", "38.101-1#6.5.4"],
+      "mode": "recall-miss",
+      "notes": "LIKELY MISLABELED. Expected 6.5.3.0 is Spurious emissions General (mentions intermodulation only as a cause). The query is specifically about an intermodulation product -> 38.101-1#6.5.4 'Transmit intermodulation' is the direct normative answer. Both kept; 6.5.4 is the better one."
+    },
+    {
+      "qid": 43,
+      "acceptableClauseIds": ["38.101-2#6.2.1.0", "38.101-2#6.2.1.3"],
+      "mode": "recall-miss",
+      "notes": "6.2.1.0 = FR2 UE max output power General/UE-type table (expected). 6.2.1.3 = UE maximum output power for power class 3 (handheld), the most common 'peak transmit power' requirement leaf for a handset. Both FR2 normative leaves."
+    },
+    {
+      "qid": 50,
+      "acceptableClauseIds": ["36.331#5.3.5.1", "36.331#5.3.5.4", "36.331#5.3.5.6"],
+      "mode": "recall-miss",
+      "notes": "5.3.5.1 = LTE reconfiguration General (expected). 5.3.5.4 = Reception of RRCConnectionReconfiguration including mobilityControlInfo (handover) — the actual handover execution leaf. 5.3.5.6 = T304 expiry (handover failure), the 'never completes' case. All normative."
+    },
+    {
+      "qid": 51,
+      "acceptableClauseIds": ["36.331#5.3.10.0", "36.331#5.3.11.3"],
+      "mode": "recall-miss",
+      "notes": "MISLABELED. Expected 36.331#5.3.10.0 is titled 'General' but its TEXT is about radioResourceConfigDedicated (SRB/DRB add/mod) — NOT timers/RLF. The correct clause for 'T310 expires -> UE does not initiate re-establishment' is 36.331#5.3.11.3 (Detection of radio link failure: T310 expiry declares RLF -> re-establishment). Better expectedClauseId would be 36.331#5.3.11.3. Original kept per rules."
+    },
+    {
+      "qid": 52,
+      "acceptableClauseIds": ["36.331#5.3.10.0", "36.331#5.3.11.1"],
+      "mode": "recall-miss",
+      "notes": "MISLABELED (same stale 5.3.10.0 as qid51). 'RLF detection misses N310 out-of-sync indications' maps to 36.331#5.3.11.1 (Detection of physical layer problems in RRC_CONNECTED: N310 consecutive out-of-sync -> start T310). Better expectedClauseId would be 36.331#5.3.11.1. Original kept per rules."
+    },
+    {
+      "qid": 53,
+      "acceptableClauseIds": ["36.331#5.5.5.1", "36.331#5.5.4.1", "36.331#5.5.4.4"],
+      "mode": "recall-miss",
+      "notes": "5.5.5.1 = LTE Measurement reporting General (expected). 5.5.4.1 = measId evaluation (decides triggering). 5.5.4.4 = Event A3 entering condition. Together answer 'report not sent after entering A3 for time-to-trigger'. All normative LTE-RRC leaves."
+    },
+    {
+      "qid": 60,
+      "acceptableClauseIds": ["36.321#5.7"],
+      "mode": "ranked-low",
+      "notes": "36.321#5.7 = LTE DRX; onDurationTimer end / Active Time behaviour specified here. Exact. Single (38.321#5.7 is the NR sibling)."
+    },
+    {
+      "qid": 61,
+      "acceptableClauseIds": ["36.321#5.7"],
+      "mode": "recall-miss",
+      "notes": "Paraphrase of qid60 ('sleeping outside active time, missing PDCCH grants'). Same LTE DRX leaf 36.321#5.7. Single."
+    },
+    {
+      "qid": 62,
+      "acceptableClauseIds": ["36.321#5.4.6"],
+      "mode": "top1",
+      "notes": "36.321#5.4.6 = LTE Power Headroom Reporting; dl-PathlossChange trigger and prohibitPHR-Timer specified here. Exact. Single."
+    },
+    {
+      "qid": 70,
+      "acceptableClauseIds": ["36.211#5.4.1"],
+      "mode": "top1",
+      "notes": "36.211#5.4.1 = PUCCH formats 1/1a/1b; the format-1 base sequence (via group hopping driven by N_ID^cell) specified here. Exact for 'base sequence depends on wrong PCI'. Single."
+    },
+    {
+      "qid": 71,
+      "acceptableClauseIds": ["36.211#6.2.1", "36.211#6.2.2"],
+      "mode": "recall-miss",
+      "notes": "6.2.1 = Resource grid (expected, generic). 6.2.2 = Resource elements, the leaf that defines the RE index pair per antenna port — directly relevant to 'RE mapping wrong for antenna port 1'. Both LTE-PHY normative leaves. Per-channel mapping clauses (e.g. 6.3.5) are more specific but were not in scope."
+    },
+    {
+      "qid": 80,
+      "acceptableClauseIds": ["36.101#6.2.2"],
+      "mode": "recall-miss",
+      "notes": "36.101#6.2.2 = LTE UE maximum output power (power-class table 6.2.2-1 covering band 28). Exact. The top10 returned only definitions/applicability clauses (excluded). Single."
+    },
+    {
+      "qid": 81,
+      "acceptableClauseIds": ["36.101#7.3.1"],
+      "mode": "recall-miss",
+      "notes": "36.101#7.3.1 = Reference sensitivity Minimum requirements (QPSK), Table 7.3.1-1 PREFSENS. Exact for 'REFSENS test fails at band edge'. Single (FR2/NR sensitivity hits in top10 are wrong RAT)."
+    },
+    {
+      "qid": 82,
+      "acceptableClauseIds": ["36.101#7.5.1"],
+      "mode": "ranked-low",
+      "notes": "36.101#7.5.1 = Adjacent Channel Selectivity Minimum requirements (Table 7.5.1-1). Exact for 'ACS not meeting spec on band 41 TDD'. Single (38.101-x ACS hits are NR)."
+    }
+  ],
+  "new": [
+    {
+      "query": "Which RNTI hexadecimal value range should the UE treat as P-RNTI vs C-RNTI? gNB seems to be assigning a C-RNTI inside the reserved range.",
+      "stratum": "NR-MAC",
+      "expectedClauseId": "38.321#7.1",
+      "acceptableClauseIds": ["38.321#7.1"],
+      "mode": "normal",
+      "feature": "figure-table",
+      "difficulty": "easy",
+      "notes": "verified exists+leaf+normative; answer is Table 7.1-1 (RNTI values) + Table 7.1-2 (RNTI usage) inside this clause."
+    },
+    {
+      "query": "MAC subheader on UL-SCH carries an unexpected LCID and the MAC CE is parsed as the wrong control element.",
+      "stratum": "NR-MAC",
+      "expectedClauseId": "38.321#6.2.1",
+      "acceptableClauseIds": ["38.321#6.2.1"],
+      "mode": "normal",
+      "feature": "figure-table",
+      "difficulty": "easy",
+      "notes": "verified exists+leaf+normative; clause defines the LCID/eLCID field and references the LCID Tables 6.2.1-1/6.2.1-2 for DL-SCH/UL-SCH."
+    },
+    {
+      "query": "DCI format 0_1 field sizes look off; the UE decodes the frequency-domain resource assignment field with the wrong number of bits.",
+      "stratum": "NR-PHY",
+      "expectedClauseId": "38.212#7.3.1.1.2",
+      "acceptableClauseIds": ["38.212#7.3.1.1.2"],
+      "mode": "normal",
+      "feature": "figure-table",
+      "difficulty": "easy",
+      "notes": "verified exists+leaf+normative; clause enumerates every DCI format 0_1 field and its bit width (large embedded table)."
+    },
+    {
+      "query": "Buffer Status Report is triggered but there is no UL-SCH grant, and the UE never sends a Scheduling Request on PUCCH.",
+      "stratum": "NR-MAC",
+      "expectedClauseId": "38.321#5.4.5",
+      "acceptableClauseIds": ["38.321#5.4.5", "38.321#5.4.4"],
+      "mode": "relational",
+      "feature": "relational",
+      "difficulty": "hard",
+      "notes": "verified exists+leaf+normative; multi-hop: 5.4.5 (BSR) triggers an SR when no UL grant, 5.4.4 (Scheduling Request) specifies sending the SR on PUCCH. Answer can live in either clause."
+    },
+    {
+      "query": "PDCP discardTimer expires and the SDU is dropped at PDCP, but the RLC entity keeps transmitting the corresponding segment.",
+      "stratum": "NR-L2",
+      "expectedClauseId": "38.323#5.3",
+      "acceptableClauseIds": ["38.323#5.3", "38.322#5.4"],
+      "mode": "relational",
+      "feature": "relational",
+      "difficulty": "hard",
+      "notes": "verified exists+leaf+normative; multi-hop across PDCP and RLC: 38.323#5.3 (PDCP SDU discard on discardTimer, indicates discard to lower layers) + 38.322#5.4 (RLC SDU discard procedures, only if not yet submitted to lower layers)."
+    },
+    {
+      "query": "After the MAC reaches the maximum number of preamble transmissions, RRC does not declare radio link failure on the random access problem.",
+      "stratum": "NR-MAC",
+      "expectedClauseId": "38.321#5.1.4",
+      "acceptableClauseIds": ["38.321#5.1.4", "38.331#5.3.10.3"],
+      "mode": "relational",
+      "feature": "relational",
+      "difficulty": "hard",
+      "notes": "verified exists+leaf+normative; multi-hop MAC->RRC: 38.321#5.1.4 (RAR reception increments preamble counter to preambleTransMax) + 38.331#5.3.10.3 (RRC declares RLF upon random access problem indication from MCG MAC)."
+    },
+    {
+      "query": "UE in RRC_IDLE fails to acquire SIB1 after reading MIB and never proceeds to cell camping.",
+      "stratum": "NR-RRC",
+      "expectedClauseId": "38.331#5.2.2.3.1",
+      "acceptableClauseIds": ["38.331#5.2.2.3.1"],
+      "mode": "normal",
+      "feature": null,
+      "difficulty": "easy",
+      "notes": "verified exists+leaf+normative; 5.2.2.3.1 = Acquisition of MIB and SIB1, specifies UE actions and the failure handling when MIB/SIB1 cannot be acquired."
+    },
+    {
+      "query": "ra-ContentionResolutionTimer expires after Msg3 but the MAC entity does not consider contention resolution failed.",
+      "stratum": "NR-MAC",
+      "expectedClauseId": "38.321#5.1.5",
+      "acceptableClauseIds": ["38.321#5.1.5"],
+      "mode": "normal",
+      "feature": null,
+      "difficulty": "easy",
+      "notes": "verified exists+leaf+normative; 5.1.5 = Contention Resolution, starts/handles ra-ContentionResolutionTimer after Msg3 and the failure path."
+    },
+    {
+      "query": "PDCP integrity verification fails on a received Data PDU but the PDU is not discarded and is delivered to upper layers.",
+      "stratum": "NR-L2",
+      "expectedClauseId": "38.323#5.2.2.1",
+      "acceptableClauseIds": ["38.323#5.2.2.1"],
+      "mode": "normal",
+      "feature": null,
+      "difficulty": "hard",
+      "notes": "verified exists+leaf+normative; 5.2.2.1 = Actions when a PDCP Data PDU is received from lower layers; specifies deciphering+integrity verification and discard on integrity failure."
+    },
+    {
+      "query": "PRACH preamble not detected by gNB; the Zadoff-Chu root sequence / cyclic shift generation appears wrong.",
+      "stratum": "NR-PHY",
+      "expectedClauseId": "38.211#6.3.3.1",
+      "acceptableClauseIds": ["38.211#6.3.3.1"],
+      "mode": "normal",
+      "feature": null,
+      "difficulty": "hard",
+      "notes": "verified exists+leaf+normative; 6.3.3.1 = PRACH Sequence generation (64 preambles per occasion, root sequence + cyclic shift), per PRACH preamble format tables."
+    },
+    {
+      "query": "Out-of-band spectrum emission mask exceeded just outside the assigned NR channel bandwidth on FR1.",
+      "stratum": "NR-RF",
+      "expectedClauseId": "38.101-1#6.5.2.2",
+      "acceptableClauseIds": ["38.101-1#6.5.2.2"],
+      "mode": "normal",
+      "feature": null,
+      "difficulty": "easy",
+      "notes": "verified exists+leaf+normative; 6.5.2.2 = Spectrum emission mask (FR1), applies from the channel-bandwidth edge for delta-f_OOB."
+    },
+    {
+      "query": "Adjacent Channel Leakage Ratio (ACLR) for the NR carrier is below the limit, causing interference to the adjacent NR channel.",
+      "stratum": "NR-RF",
+      "expectedClauseId": "38.101-1#6.5.2.4.1",
+      "acceptableClauseIds": ["38.101-1#6.5.2.4.1"],
+      "mode": "normal",
+      "feature": null,
+      "difficulty": "easy",
+      "notes": "verified exists+leaf+normative; 6.5.2.4.1 = NR ACLR (FR1), the NR-adjacent-channel leakage requirement."
+    },
+    {
+      "query": "Contention resolution on LTE fails: UE does not stop the mac-ContentionResolutionTimer after PDCCH addressed to its C-RNTI.",
+      "stratum": "LTE-MAC",
+      "expectedClauseId": "36.321#5.1.5",
+      "acceptableClauseIds": ["36.321#5.1.5"],
+      "mode": "normal",
+      "feature": null,
+      "difficulty": "hard",
+      "notes": "verified exists+leaf+normative; 36.321#5.1.5 = LTE Contention Resolution based on C-RNTI on PDCCH or UE Contention Resolution Identity on DL-SCH."
+    },
+    {
+      "query": "LTE random access preamble fails timing alignment; the preamble cyclic prefix / sequence length looks wrong for the configured format.",
+      "stratum": "LTE-PHY",
+      "expectedClauseId": "36.211#5.7.1",
+      "acceptableClauseIds": ["36.211#5.7.1"],
+      "mode": "normal",
+      "feature": null,
+      "difficulty": "hard",
+      "notes": "verified exists+leaf+normative; 36.211#5.7.1 = Random access preamble Time and frequency structure (CP length + sequence length per preamble format, Table 5.7.1-1)."
+    },
+    {
+      "query": "UE in RRC_IDLE does not respond to a Paging message whose UE identity matches its allocated identity.",
+      "stratum": "LTE-RRC",
+      "expectedClauseId": "36.331#5.3.2.3",
+      "acceptableClauseIds": ["36.331#5.3.2.3"],
+      "mode": "normal",
+      "feature": null,
+      "difficulty": "easy",
+      "notes": "verified exists+leaf+normative; 36.331#5.3.2.3 = Reception of the Paging message by the UE (matching ue-Identity in a PagingRecord and the forwarding/connection actions)."
+    }
+  ]
+}
