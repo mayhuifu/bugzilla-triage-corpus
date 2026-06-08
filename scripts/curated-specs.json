@@ -37,6 +37,8 @@
     { "spec": "38.304", "series": "38", "title": "NR User Equipment (UE) procedures in Idle mode and in RRC Inactive state" },
     { "spec": "38.133", "series": "38", "title": "NR Requirements for support of radio resource management" },
     { "spec": "36.304", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); User Equipment (UE) procedures in idle mode" },
-    { "spec": "36.133", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); Requirements for support of radio resource management" }
+    { "spec": "36.133", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); Requirements for support of radio resource management" },
+    { "spec": "38.306", "series": "38", "title": "NR; User Equipment (UE) radio access capabilities" },
+    { "spec": "24.501", "series": "24", "title": "Non-Access-Stratum (NAS) protocol for 5G System (5GS); Stage 3" }
   ]
 }
