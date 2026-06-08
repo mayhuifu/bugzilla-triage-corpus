@@ -26,6 +26,7 @@
 // ─────────────────────────────────────────────────────────────────
 
 import * as fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -46,6 +47,25 @@ const MODEL = process.env.EMBED_MODEL ?? "BAAI/bge-m3";
 const BATCH = Number(process.env.EMBED_BATCH ?? "32");
 const DEVICE = process.env.EMBED_DEVICE;
 const PYTHON = process.env.EMBED_PY ?? "python3";
+
+/** The one-time embed venv setup, surfaced in every Python-spawn failure so a
+ *  stale/missing EMBED_PY (e.g. a cleaned-up venv) gives an actionable error
+ *  instead of a raw ENOENT. */
+const VENV_HINT =
+  `  uv venv --python 3.12 /tmp/embed-venv\n` +
+  `  uv pip install --python /tmp/embed-venv sentence-transformers numpy\n` +
+  `  export EMBED_PY=/tmp/embed-venv/bin/python`;
+
+/** Fail fast (with the fix) when EMBED_PY points at an explicit interpreter
+ *  path that doesn't exist, instead of spawning blindly and crashing mid-run. */
+function preflightPython(): void {
+  if (PYTHON.includes("/") && !existsSync(PYTHON)) {
+    throw new Error(
+      `EMBED_PY="${PYTHON}" does not exist (stale env / cleaned-up venv?).\n` +
+      `Create an embed venv and point EMBED_PY at it:\n${VENV_HINT}`,
+    );
+  }
+}
 
 interface ClauseLike {
   id: string;
@@ -89,7 +109,14 @@ async function runSidecar(inPath: string, outPath: string): Promise<void> {
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(PYTHON, args, { stdio: ["ignore", "inherit", "inherit"] });
-    child.on("error", reject);
+    child.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") {
+        reject(new Error(
+          `cannot spawn Python ("${PYTHON}"). Point EMBED_PY at a venv with ` +
+          `sentence-transformers:\n${VENV_HINT}`,
+        ));
+      } else reject(err);
+    });
     child.on("exit", (code) => {
       if (code === 0) resolve();
       else reject(new Error(`embed_sidecar.py exited with code ${code}`));
@@ -157,6 +184,7 @@ interface EmbeddingRecord {
 
 async function main() {
   await fs.mkdir(DIST_DIR, { recursive: true });
+  preflightPython();
 
   log(`reading ${IN_CLAUSES_JSONL}`);
   const clauses = await readClausesJsonl(IN_CLAUSES_JSONL);
@@ -219,6 +247,20 @@ async function main() {
   }
   await fs.writeFile(OUT_PARENT, parentLines.join("\n") + "\n");
   log(`✓ wrote ${OUT_PARENT} (${parentCount} parent rollup(s))`);
+
+  // ── Embedding metadata (source of truth for 03-index meta.embeddingModel) ──
+  // 03-index.ts reads this so the corpus is labeled with the ACTUAL model used
+  // here — not whatever EMBED_MODEL happens to be in the index step's shell,
+  // which silently defaulted to bge-m3 and shipped a mislabeled corpus (the
+  // desktop then falls back to BM25). dim is read off the real vectors.
+  const dim = leafRecords.length
+    ? decodeFloat16Base64(leafRecords[0].embedding_b64).length
+    : 0;
+  await fs.writeFile(
+    path.join(DIST_DIR, "embed-meta.json"),
+    JSON.stringify({ model: MODEL, dim, dtype: "float16" }, null, 2) + "\n",
+  );
+  log(`✓ wrote embed-meta.json (model=${MODEL}, dim=${dim}, dtype=float16)`);
 
   // Clean up tmp files. Keep them if EMBED_KEEP_TMP=1 for debugging.
   if (!process.env.EMBED_KEEP_TMP) {

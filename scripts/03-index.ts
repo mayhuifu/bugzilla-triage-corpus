@@ -67,8 +67,21 @@ const IN_MEDIA_DIR = path.join(DIST_DIR, "media");
 // acronyms, eval_queries surfaces are unchanged. Bumping the version
 // lets v3-aware desktops opt INTO rendering the figures.
 const SCHEMA_VERSION = "3";
-const EMBED_MODEL = process.env.EMBED_MODEL ?? "BAAI/bge-m3";
-const EMBED_DTYPE = "float16";
+
+// Embedding identity is read from dist/embed-meta.json (written by embed.ts) as
+// the SOURCE OF TRUTH — it records the model actually used to compute the
+// vectors. Fall back to EMBED_MODEL env / default only when the file is absent
+// (e.g. a dry-run with no embeddings). This kills the bge-m3 footgun: index
+// trusting a stale/unset env and mislabeling a bge-small corpus → silent BM25
+// fallback in the desktop (it requires meta.embeddingModel to match its embedder).
+const EMBED_META: { model?: string; dim?: number; dtype?: string } | null = (() => {
+  try {
+    const m = JSON.parse(fsSync.readFileSync(path.join(DIST_DIR, "embed-meta.json"), "utf8"));
+    return m && typeof m.model === "string" ? m : null;
+  } catch { return null; }
+})();
+const EMBED_MODEL = EMBED_META?.model ?? process.env.EMBED_MODEL ?? "BAAI/bge-m3";
+const EMBED_DTYPE = EMBED_META?.dtype ?? "float16";
 
 const log = (...args: unknown[]) => console.log("[index]", ...args);
 const warn = (...args: unknown[]) => console.warn("[index] ⚠", ...args);
@@ -472,6 +485,13 @@ async function main() {
   meta.run("totalFigureImages", String(figImgInserted));
   meta.run("schemaVersion", hasVec ? SCHEMA_VERSION : `${SCHEMA_VERSION}-no-vec`);
   if (hasVec) {
+    if (!EMBED_META) {
+      warn(`no dist/embed-meta.json — labeling corpus from EMBED_MODEL env/default ` +
+        `("${EMBED_MODEL}"). If that doesn't match the vectors, the desktop falls ` +
+        `back to BM25. Re-run \`npm run embed\` to write embed-meta.json.`);
+    }
+    log(`embeddingModel=${EMBED_MODEL} dim=${dim} dtype=${EMBED_DTYPE}` +
+      `${EMBED_META ? " (from embed-meta.json)" : " (from env/default)"}`);
     meta.run("embeddingModel", EMBED_MODEL);
     meta.run("embeddingDim", String(dim));
     meta.run("embeddingDtype", EMBED_DTYPE);
