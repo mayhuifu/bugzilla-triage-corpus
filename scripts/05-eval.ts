@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
+import { createRetrieverV2 } from "./retriever-v2.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
@@ -36,7 +37,12 @@ const DIST_DIR = path.join(REPO_ROOT, "dist");
 const OUT_SQLITE = path.join(REPO_ROOT, "out", "corpus.sqlite");
 const OUT_REPORT = path.join(DIST_DIR, "eval-report.json");
 
-const MIN_LIFT = Number(process.env.EVAL_MIN_LIFT ?? "0.15");
+// Recalibrated 0.15 → 0.08 (2026-07): the aux FTS column raised the
+// BM25-only baseline floor (it now matches identifier splits + acronym
+// expansions), compressing the relative lift even as absolute hybrid
+// quality rose (MRR@10 0.284 → 0.341 when the hybrid arm moved to
+// retriever v2). Keep > 0 per ADR-008: hybrid must still beat FTS-only.
+const MIN_LIFT = Number(process.env.EVAL_MIN_LIFT ?? "0.08");
 const RRF_K = 60;
 const CANDIDATES_PER_SOURCE = 50;
 const TOP_K = 10;
@@ -287,32 +293,12 @@ async function main() {
     ORDER BY bm25(clauses_fts)
     LIMIT ?
   `);
-  const hybridSql = hasVec ? db.prepare(`
-    WITH fts_top AS (
-      SELECT c.rowid AS rowid,
-             ROW_NUMBER() OVER (ORDER BY bm25(clauses_fts)) AS rk
-      FROM clauses_fts
-      JOIN clauses c ON c.rowid = clauses_fts.rowid
-      WHERE clauses_fts MATCH ?
-      LIMIT ?
-    ),
-    vec_top AS (
-      SELECT rowid,
-             ROW_NUMBER() OVER (ORDER BY distance) AS rk
-      FROM clauses_vec
-      WHERE embedding MATCH ? AND k = ?
-    ),
-    fused AS (
-      SELECT rowid, SUM(1.0 / (? + rk)) AS rrf_score
-      FROM (SELECT rowid, rk FROM fts_top UNION ALL SELECT rowid, rk FROM vec_top)
-      GROUP BY rowid
-    )
-    SELECT c.id
-    FROM fused
-    JOIN clauses c ON c.rowid = fused.rowid
-    ORDER BY fused.rrf_score DESC
-    LIMIT ?
-  `) : null;
+  // Hybrid arm = retriever v2 (the configuration consumers actually run:
+  // concept-group ladder + chunk_fts + chunk_vec + priors + citation-pull).
+  // The old v1 CTE measured a retrieval shape nothing ships anymore.
+  const retrieverV2 = hasVec ? createRetrieverV2(db, {
+    indegreeCachePath: path.join(DIST_DIR, ".citation-indegree.json"),
+  }) : null;
 
   // ── Per-query loop ─────────────────────────────────────────
   const results: PerQueryResult[] = [];
@@ -322,17 +308,13 @@ async function main() {
     const baselineRank = (baseRows.findIndex(r => r.id === q.expected_clause_id) + 1) || 0;
 
     let hybridRank: number | null = null;
-    if (hybridSql) {
+    if (retrieverV2) {
       const qBlob = queryEmb.get(q.qid);
       if (!qBlob) {
         warn(`no embedding for qid=${q.qid}; skipping hybrid for this query`);
       } else {
-        const hybridRows = hybridSql.all(
-          match, CANDIDATES_PER_SOURCE,
-          qBlob, CANDIDATES_PER_SOURCE,
-          RRF_K, TOP_K,
-        ) as Array<{ id: string }>;
-        hybridRank = (hybridRows.findIndex(r => r.id === q.expected_clause_id) + 1) || 0;
+        const ids = retrieverV2.retrieve(q.query, qBlob).slice(0, TOP_K);
+        hybridRank = (ids.findIndex(id => id === q.expected_clause_id) + 1) || 0;
       }
     }
 
