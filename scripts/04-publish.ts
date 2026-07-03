@@ -132,13 +132,26 @@ async function main() {
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
   log(`wrote ${manifestPath}`);
 
+  // Stable-named alias of the manifest. The versioned manifest filename
+  // embeds tag+date, so the desktop's "check for corpus update" could
+  // never DISCOVER a new tag — its saved URL always re-fetched the same
+  // release's manifest. Uploading the same manifest under a fixed name
+  // makes `releases/latest/download/corpus-latest.manifest.json` always
+  // resolve to the newest release (GitHub's `latest` redirect), which is
+  // what the desktop's default manifest URL points at from v0.7.12.
+  // The artifact URL INSIDE the manifest stays versioned, so downloads
+  // and sha256 verification are unchanged.
+  const latestAliasPath = path.join(OUT_DIR, "corpus-latest.manifest.json");
+  await fs.copyFile(manifestPath, latestAliasPath);
+  log(`wrote ${latestAliasPath} (stable-named alias for releases/latest discovery)`);
+
   // ── 4. Release ────────────────────────────────────────────────
   // Idempotent — if the tag already exists, gh release create errors;
   // upload to existing instead.
   const existing = spawnSync("gh", ["release", "view", tag], { cwd: REPO_ROOT, encoding: "utf8" });
   if (existing.status === 0) {
     log(`release ${tag} already exists; uploading assets with --clobber`);
-    gh(["release", "upload", tag, gzPath, shaPath, manifestPath, "--clobber"]);
+    gh(["release", "upload", tag, gzPath, shaPath, manifestPath, latestAliasPath, "--clobber"]);
   } else {
     // Read the real schema/embedding facts off the artifact rather than
     // hardcoding them — the v1-era hardcoded notes shipped stale
@@ -163,7 +176,7 @@ async function main() {
                   `See the manifest for the verification fields the desktop app expects.\n`;
     const args = [
       "release", "create", tag,
-      gzPath, shaPath, manifestPath,
+      gzPath, shaPath, manifestPath, latestAliasPath,
       "--title", `3GPP Rel-17 corpus · ${tag}`,
       "--notes", notes,
     ];
