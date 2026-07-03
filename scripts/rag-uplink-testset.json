@@ -1,0 +1,84 @@
+{
+  "description": "UL channel-coexistence retrieval test (from RAG-test.xlsx). PASS = every expected ref (prefix match) in top-5 hybrid results, for EVERY variant of the row. Variants come from splitting column A on 'or' — parallel phrasings that must return the same refs.",
+  "topK": 5,
+  "rows": [
+    {
+      "row": 2,
+      "name": "PUSCH + PUCCH overlap",
+      "variants": ["1 PUSCH + 1 PUCCH", "overlapping PUSCH and PUCCH"],
+      "expected": ["38.213#9.2.5", "38.213#9.3", "38.306#4.2.7.7"]
+    },
+    {
+      "row": 5,
+      "name": "PUSCH + SRS overlap",
+      "variants": ["1 PUSCH + 1 SRS", "overlapping PUSCH and SRS"],
+      "expected": ["38.214#6.2.1"]
+    },
+    {
+      "row": 6,
+      "name": "PUCCH + SRS overlap",
+      "variants": ["1 PUCCH + 1 SRS", "overlapping PUCCH and SRS"],
+      "expected": ["38.214#6.2.1"]
+    },
+    {
+      "row": 7,
+      "name": "PUSCH + PUCCH + SRS overlap",
+      "variants": ["1 PUSCH + 1 PUCCH + 1 SRS", "overlapping PUSCH, PUCCH and SRS"],
+      "expected": ["38.213#9.2.5", "38.213#9.3", "38.214#6.2.1"]
+    },
+    {
+      "row": 9,
+      "name": "Periodic + aperiodic SRS",
+      "variants": ["Periodic SRS + Aperiodic SRS"],
+      "expected": ["38.306#4.2.7.7", "38.214#6.2.1"]
+    },
+    {
+      "row": 11,
+      "name": "Two PUCCH",
+      "variants": ["PUCCH + PUCCH as two separate transmissions"],
+      "expected": ["38.306#4.2.7.7"]
+    },
+    {
+      "row": 12,
+      "name": "Two PUSCH different TB",
+      "variants": ["PUSCH + PUSCH for different transport blocks"],
+      "expected": ["38.306#4.2.7.7"]
+    },
+    {
+      "row": 13,
+      "name": "Two periodic SRS",
+      "variants": ["Two periodic SRS resources"],
+      "expected": ["38.306#4.2.7.7"]
+    },
+    {
+      "row": 14,
+      "name": "Two aperiodic SRS",
+      "variants": ["Two aperiodic SRS resources"],
+      "expected": ["38.306#4.2.7.7"]
+    },
+    {
+      "row": 15,
+      "name": "Semi-persistent SRS",
+      "variants": ["Semi-persistent SRS"],
+      "expected": ["38.306#4.2.7.7"]
+    },
+    {
+      "row": 16,
+      "name": "Same-symbol PUSCH + PUCCH",
+      "variants": ["Same-symbol parallel PUSCH + PUCCH"],
+      "expected": ["38.213#9.2.5", "38.213#9.3", "38.306#4.2.7.7"]
+    },
+    {
+      "row": 19,
+      "name": "Same-symbol PUSCH/PUCCH + SRS",
+      "variants": ["Same-symbol PUSCH/PUCCH + SRS"],
+      "expected": ["38.214#6.2.1"]
+    },
+    {
+      "row": 20,
+      "name": "Cross-carrier simultaneous UL",
+      "variants": ["Cross-carrier simultaneous uplink transmission"],
+      "expected": ["38.306#4.2.21.1", "38.306#4.2.7.7"]
+    }
+  ]
+}
