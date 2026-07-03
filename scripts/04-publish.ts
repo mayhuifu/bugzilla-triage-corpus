@@ -116,11 +116,31 @@ async function main() {
   // exact one at release-upload time, but the pattern is fixed.
   const ghRepo = gh(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]).trim();
   const downloadUrl = `https://github.com/${ghRepo}/releases/download/${tag}/${path.basename(gzPath)}`;
+  // Embedding facts off the artifact's meta table — consumers (the desktop's
+  // install-corpus.mjs) use embeddingModel to know WHICH query embedder to
+  // stage alongside the corpus (bge-m3 for rel17-v7+) without opening the
+  // SQLite. Additive manifest fields; older readers ignore them.
+  let embeddingMeta: Record<string, string | number> = {};
+  try {
+    const metaDb = new Database(SQLITE_PATH, { readonly: true });
+    const meta = Object.fromEntries(
+      (metaDb.prepare("SELECT key, value FROM meta").all() as Array<{ key: string; value: string }>)
+        .map(r => [r.key, r.value]));
+    metaDb.close();
+    if (meta.embeddingModel) {
+      embeddingMeta = {
+        embeddingModel: meta.embeddingModel,
+        embeddingDim: Number(meta.embeddingDim ?? 0),
+        embeddingDtype: meta.embeddingDtype ?? "",
+      };
+    }
+  } catch { /* manifest ships without embedding facts */ }
   const manifest = {
     schemaVersion: 1,
     release: "Rel-17",
     tag,
     builtAt: new Date().toISOString(),
+    ...embeddingMeta,
     artifact: {
       filename: path.basename(gzPath),
       url: downloadUrl,
