@@ -18,6 +18,7 @@ import * as path from "node:path";
 import * as crypto from "node:crypto";
 import * as zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
+import Database from "better-sqlite3";
 import { spawnSync } from "node:child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -139,9 +140,24 @@ async function main() {
     log(`release ${tag} already exists; uploading assets with --clobber`);
     gh(["release", "upload", tag, gzPath, shaPath, manifestPath, "--clobber"]);
   } else {
+    // Read the real schema/embedding facts off the artifact rather than
+    // hardcoding them — the v1-era hardcoded notes shipped stale
+    // "schemaVersion=1" text on releases whose artifact was already v3.
+    let schemaLine = "* Schema: see `meta` table in the artifact\n";
+    try {
+      const metaDb = new Database(SQLITE_PATH, { readonly: true });
+      const meta = Object.fromEntries(
+        (metaDb.prepare("SELECT key, value FROM meta").all() as Array<{ key: string; value: string }>)
+          .map(r => [r.key, r.value]));
+      metaDb.close();
+      schemaLine =
+        `* Schema: \`schemaVersion=${meta.schemaVersion}\` — clauses+FTS5(aux=${meta.ftsAux ?? "0"}), ` +
+        `chunk FTS/vec, ${meta.totalClauses} clauses / ${meta.specCount} specs\n` +
+        `* Embeddings: \`${meta.embeddingModel}\` (dim=${meta.embeddingDim}, ${meta.embeddingDtype})\n`;
+    } catch { /* keep generic line */ }
     const notes = `Auto-generated Rel-17 NR + LTE 3GPP corpus.\n\n` +
                   `* Artifact: \`${path.basename(gzPath)}\` (${(gzStat.size / 1024 / 1024).toFixed(1)} MB gzipped, ${(sqliteStat.size / 1024 / 1024).toFixed(1)} MB uncompressed)\n` +
-                  `* Schema: \`schemaVersion=1\` — \`clauses\` + \`clauses_fts\` (FTS5 BM25)\n` +
+                  schemaLine +
                   `* SHA-256: \`${gzSha}\`\n\n` +
                   `Consumed by [bugzilla-triage-desktop](https://github.com/${ghRepo.split("/")[0]}/bugzilla-triage-desktop). ` +
                   `See the manifest for the verification fields the desktop app expects.\n`;
