@@ -38,6 +38,7 @@ const IN_CLAUSES_JSONL = process.env.EMBED_INPUT
   ? path.resolve(process.env.EMBED_INPUT)
   : path.join(DIST_DIR, "clauses.jsonl");
 const OUT_LEAF = path.join(DIST_DIR, "clauses-with-vec.jsonl");
+const OUT_CHUNK = path.join(DIST_DIR, "chunks-with-vec.jsonl");
 const OUT_PARENT = path.join(DIST_DIR, "parents-with-vec.jsonl");
 
 const log = (...args: unknown[]) => console.log("[embed]", ...args);
@@ -93,6 +94,15 @@ function asEmbedRecord(c: ClauseLike): { id: string; text: string } {
   const label = c.title ? `${c.title}\n` : "";
   return { id: c.id, text: `${label}${c.text}` };
 }
+
+// ── Chunking ─────────────────────────────────────────────────────
+// Shared with 03-index.ts (chunk_fts) — see scripts/chunking.ts for
+// the rationale. Embed CHUNK windows and derive the whole-clause
+// vector as the normalized mean of its chunks (identical to direct
+// encoding for single-chunk clauses). Chunk vectors ship as
+// chunk_vec for fine-grained dense retrieval with per-clause
+// max-pooling.
+import { chunkClause, CHUNK_CHARS, CHUNK_OVERLAP } from "./chunking.js";
 
 /** Spawn the Python sidecar and wait for completion. */
 async function runSidecar(inPath: string, outPath: string): Promise<void> {
@@ -194,16 +204,55 @@ async function main() {
   }
   log(`embedding ${clauses.length} clause(s) with ${MODEL}`);
 
-  // ── Leaf embeddings ──────────────────────────────────────────
+  // ── Chunk embeddings ─────────────────────────────────────────
+  // Embed chunk windows (short → fast, precise), then derive each
+  // whole-clause vector as the L2-normalized mean of its chunks.
   const tmpIn = path.join(DIST_DIR, ".embed-in.jsonl");
   const tmpOut = path.join(DIST_DIR, ".embed-out.jsonl");
-  const inLines = clauses.map(c => JSON.stringify(asEmbedRecord(c))).join("\n") + "\n";
+  const chunksByClause = new Map<string, Array<{ id: string; text: string }>>();
+  let totalChunks = 0;
+  for (const c of clauses) {
+    const ch = chunkClause(c);
+    chunksByClause.set(c.id, ch);
+    totalChunks += ch.length;
+  }
+  log(`chunked into ${totalChunks} window(s) (CHUNK_CHARS=${CHUNK_CHARS}, overlap=${CHUNK_OVERLAP})`);
+  const inLines = Array.from(chunksByClause.values()).flat()
+    .map(r => JSON.stringify(r)).join("\n") + "\n";
   await fs.writeFile(tmpIn, inLines);
   await runSidecar(tmpIn, tmpOut);
 
-  // Pipe sidecar output straight to OUT_LEAF (no further processing).
-  await fs.copyFile(tmpOut, OUT_LEAF);
-  log(`✓ wrote ${OUT_LEAF}`);
+  const chunkRecords = await readEmbeddingsJsonl(tmpOut);
+  const chunkIdx = new Map(chunkRecords.map(r => [r.id, decodeFloat16Base64(r.embedding_b64)]));
+
+  // chunk file: {id, clauseId, embedding_b64} → chunk_vec in 03-index
+  const chunkLines: string[] = [];
+  for (const r of chunkRecords) {
+    const clauseId = r.id.replace(/::c\d+$/, "");
+    chunkLines.push(JSON.stringify({ id: r.id, clauseId, embedding_b64: r.embedding_b64 }));
+  }
+  await fs.writeFile(OUT_CHUNK, chunkLines.join("\n") + "\n");
+  log(`✓ wrote ${OUT_CHUNK} (${chunkLines.length} chunk vector(s))`);
+
+  // leaf file: normalized mean of the clause's chunk vectors — same
+  // {id, embedding_b64} shape 03-index.ts already consumes.
+  const leafLines: string[] = [];
+  for (const c of clauses) {
+    const vecs = (chunksByClause.get(c.id) ?? [])
+      .map(ch => chunkIdx.get(ch.id))
+      .filter((v): v is Float32Array => !!v);
+    if (vecs.length === 0) continue;
+    const dim = vecs[0].length;
+    const acc = new Float32Array(dim);
+    for (const v of vecs) for (let i = 0; i < dim; i++) acc[i] += v[i];
+    let norm = 0;
+    for (let i = 0; i < dim; i++) { acc[i] /= vecs.length; norm += acc[i] * acc[i]; }
+    norm = Math.sqrt(norm) || 1;
+    for (let i = 0; i < dim; i++) acc[i] /= norm;
+    leafLines.push(JSON.stringify({ id: c.id, embedding_b64: encodeFloat16Base64(acc) }));
+  }
+  await fs.writeFile(OUT_LEAF, leafLines.join("\n") + "\n");
+  log(`✓ wrote ${OUT_LEAF} (${leafLines.length} clause vector(s))`);
 
   // ── Parent rollups ───────────────────────────────────────────
   // For each non-leaf parent referenced by parentId, average its
@@ -212,8 +261,10 @@ async function main() {
   // enable parent-document retrieval (a hierarchical-retrieval win
   // documented in Chat3GPP).
   log("computing parent rollups…");
-  const leafRecords = await readEmbeddingsJsonl(tmpOut);
-  const leafIdx = new Map(leafRecords.map(r => [r.id, decodeFloat16Base64(r.embedding_b64)]));
+  const leafIdx = new Map(leafLines.map(l => {
+    const r = JSON.parse(l) as EmbeddingRecord;
+    return [r.id, decodeFloat16Base64(r.embedding_b64)] as const;
+  }));
   const childrenByParent = new Map<string, Float32Array[]>();
   for (const c of clauses) {
     if (!c.parentId) continue;
@@ -253,8 +304,8 @@ async function main() {
   // here — not whatever EMBED_MODEL happens to be in the index step's shell,
   // which silently defaulted to bge-m3 and shipped a mislabeled corpus (the
   // desktop then falls back to BM25). dim is read off the real vectors.
-  const dim = leafRecords.length
-    ? decodeFloat16Base64(leafRecords[0].embedding_b64).length
+  const dim = chunkRecords.length
+    ? decodeFloat16Base64(chunkRecords[0].embedding_b64).length
     : 0;
   await fs.writeFile(
     path.join(DIST_DIR, "embed-meta.json"),

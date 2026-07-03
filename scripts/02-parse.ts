@@ -432,7 +432,18 @@ function buildLeafClauses(
       if (nxt.clauseNo.startsWith(prefix)) { isLeaf = false; break; }
       if (!nxt.clauseNo.startsWith(b.clauseNo + ".")) break;
     }
-    if (!isLeaf) continue;
+    // Non-leaf headings often carry substantial normative intro text
+    // BEFORE their first child heading (e.g. 38.214 §6.2.1 "UE sounding
+    // procedure" holds all the SRS collision/priority rules ahead of
+    // 6.2.1.1). Dropping them makes that text unretrievable. Emit the
+    // intro as its own clause row (id = the parent clauseNo itself —
+    // no collision with child leaves) when it is meaty enough to be
+    // more than a one-line section lead-in.
+    const PARENT_INTRO_MIN_CHARS = 150;
+    if (!isLeaf) {
+      const introText = htmlToText(b.bodyHtml);
+      if (introText.length < PARENT_INTRO_MIN_CHARS) continue;
+    }
 
     let parentNo: string | null = null;
     if (b.clauseNo.includes(".")) {

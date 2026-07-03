@@ -41,6 +41,7 @@ import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
 
 import golden from "./golden-clauses.json" with { type: "json" };
+import { chunkClause } from "./chunking.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
@@ -50,6 +51,7 @@ const IN_CLAUSES_JSON = path.join(DIST_DIR, "clauses.json");
 const IN_REPORT = path.join(DIST_DIR, "parse-report.json");
 const IN_CLAUSE_EMB = path.join(DIST_DIR, "clauses-with-vec.jsonl");
 const IN_PARENT_EMB = path.join(DIST_DIR, "parents-with-vec.jsonl");
+const IN_CHUNK_EMB = path.join(DIST_DIR, "chunks-with-vec.jsonl");
 const IN_ACRONYMS = path.join(__dirname, "acronyms.json");
 const IN_EVAL_QUERIES = path.join(__dirname, "eval-queries.json");
 const OUT_SQLITE = path.join(OUT_DIR, "corpus.sqlite");
@@ -223,7 +225,14 @@ async function main() {
       tables_json   TEXT NOT NULL DEFAULT '[]',
       figures_json  TEXT NOT NULL DEFAULT '[]',
       mentions_json TEXT NOT NULL DEFAULT '[]',
-      citation      TEXT NOT NULL
+      citation      TEXT NOT NULL,
+      -- aux: retrieval-only enrichment text (NOT for display).
+      -- Carries (a) word-splits of camelCase/hyphenated capability
+      -- identifiers ("twoPUCCH-F0-2-ConsecSymbols" → "two PUCCH F0 2
+      -- Consec Symbols") and (b) spelled-out expansions of glossary
+      -- acronyms the clause uses but never spells out ("CA" → "Carrier
+      -- Aggregation"). Additive column — older readers ignore it.
+      aux           TEXT NOT NULL DEFAULT ''
     );
 
     CREATE INDEX idx_clauses_spec_no ON clauses(spec, clause_no);
@@ -231,17 +240,29 @@ async function main() {
 
     -- v2 FTS5 widens indexed columns to include parent_title and path
     -- so BM25 ranks hierarchy hits (ADR-004 hierarchy preservation).
+    -- v3.1 appends aux (identifier splits + acronym expansions) as the
+    -- LAST column so unweighted bm25(clauses_fts) and column-less MATCH
+    -- keep behaving for existing readers.
     CREATE VIRTUAL TABLE clauses_fts USING fts5(
-      citation, title, parent_title, path, text,
+      citation, title, parent_title, path, text, aux,
       content='clauses',
       content_rowid='rowid',
       tokenize='porter unicode61 remove_diacritics 2'
     );
 
     CREATE TRIGGER clauses_ai AFTER INSERT ON clauses BEGIN
-      INSERT INTO clauses_fts(rowid, citation, title, parent_title, path, text)
-      VALUES (new.rowid, new.citation, new.title, new.parent_title, new.path, new.text);
+      INSERT INTO clauses_fts(rowid, citation, title, parent_title, path, text, aux)
+      VALUES (new.rowid, new.citation, new.title, new.parent_title, new.path, new.text, new.aux);
     END;
+
+    -- v3.1 chunk-level BM25 (mirrors chunk_vec granularity): a 35k-char
+    -- clause can never win document-level BM25 against short clauses —
+    -- FTS5's length normalization is not tunable. Score chunk windows
+    -- instead and max-pool per clause (clause_id is carried UNINDEXED).
+    CREATE VIRTUAL TABLE chunk_fts USING fts5(
+      text, clause_id UNINDEXED,
+      tokenize='porter unicode61 remove_diacritics 2'
+    );
 
     CREATE TABLE meta (
       key   TEXT PRIMARY KEY,
@@ -292,7 +313,66 @@ async function main() {
         child_count INTEGER NOT NULL DEFAULT 0
       );
       CREATE VIRTUAL TABLE parent_vec USING vec0(embedding FLOAT[${dim}]);
+      -- v3.1 chunk-level dense retrieval: one vector per ~1.6k-char
+      -- window of a clause (long clauses were one diluted vector —
+      -- fatal for 35k-char capability tables). chunk_map joins a
+      -- chunk_vec rowid back to its clause. clauses_vec stays as the
+      -- whole-clause rollup for older readers.
+      CREATE VIRTUAL TABLE chunk_vec USING vec0(embedding FLOAT[${dim}]);
+      CREATE TABLE chunk_map (
+        chunk_rowid  INTEGER PRIMARY KEY,
+        clause_id    TEXT NOT NULL,
+        FOREIGN KEY (clause_id) REFERENCES clauses(id)
+      );
+      CREATE INDEX idx_chunk_map_clause ON chunk_map(clause_id);
     `);
+  }
+
+  // ── aux enrichment builder ─────────────────────────────────
+  // (a) Identifier splitting: 3GPP capability/IE names are camelCase
+  //     hyphen compounds ("pusch-ProcessingType1-DifferentTB-PerSlot")
+  //     that FTS tokenizes as opaque lumps — a query for "different
+  //     transport blocks" can never hit "DifferentTB". Split them into
+  //     word runs and index the words in aux.
+  // (b) Doc-side acronym expansion: clauses like 38.306 §4.2.21.1 say
+  //     only "CA, MR-DC" and never spell the expansion, so queries
+  //     phrased in prose ("carrier aggregation") miss. Append the
+  //     glossary expansion for acronyms the clause uses but never
+  //     spells out.
+  const IDENT_RE = /\b[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+\b|\b[a-z]+(?:[A-Z][a-z0-9]+)+\b/g;
+  const AUX_MAX_CHARS = 4000;
+  const acronymByToken = new Map<string, string>();
+  for (const a of acronyms) acronymByToken.set(a.acronym, a.expansion);
+  function splitIdentifier(ident: string): string[] {
+    return ident
+      .split("-")
+      .flatMap(part => part.split(/(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Za-z])(?=[0-9])/))
+      .filter(w => w.length >= 2);
+  }
+  function buildAux(title: string, text: string): string {
+    const hay = `${title}\n${text}`;
+    const out: string[] = [];
+    const seen = new Set<string>();
+    // (a) identifier word-splits
+    for (const m of hay.match(IDENT_RE) ?? []) {
+      if (seen.has(m)) continue;
+      seen.add(m);
+      const words = splitIdentifier(m);
+      if (words.length >= 2) out.push(words.join(" "));
+      if (out.join(" · ").length > AUX_MAX_CHARS) break;
+    }
+    // (b) acronyms used but never spelled out
+    const hayLower = hay.toLowerCase();
+    for (const [acr, expansion] of acronymByToken) {
+      if (seen.has(`§${acr}`)) continue;
+      seen.add(`§${acr}`);
+      const tokenRe = new RegExp(`\\b${acr.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")}\\b`);
+      if (tokenRe.test(hay) && !hayLower.includes(expansion.toLowerCase())) {
+        out.push(expansion);
+      }
+    }
+    const aux = out.join(" · ");
+    return aux.length > AUX_MAX_CHARS ? aux.slice(0, AUX_MAX_CHARS) : aux;
   }
 
   // ── Insert clauses ─────────────────────────────────────────
@@ -303,10 +383,10 @@ async function main() {
   const insertClause = db.prepare(`
     INSERT OR IGNORE INTO clauses (id, spec, release, version, clause_no, title,
                                    parent_id, parent_title, path, text,
-                                   tables_json, figures_json, mentions_json, citation)
+                                   tables_json, figures_json, mentions_json, citation, aux)
     VALUES (@id, @spec, @release, @version, @clauseNo, @title,
             @parentId, @parentTitle, @path, @text,
-            @tablesJson, @figuresJson, @mentionsJson, @citation)
+            @tablesJson, @figuresJson, @mentionsJson, @citation, @aux)
   `);
   const txClauses = db.transaction((rows: ClauseRow[]) => {
     let i = 0;
@@ -326,12 +406,54 @@ async function main() {
         figuresJson: JSON.stringify(r.figures ?? []),
         mentionsJson: JSON.stringify(r.mentions ?? []),
         citation: r.citation,
+        aux: buildAux(r.title, r.text),
       });
       if (++i % 5000 === 0) log(`  inserted ${i}/${rows.length}…`);
     }
   });
   txClauses(rows);
   log(`✓ inserted ${rows.length} clauses`);
+
+  // ── chunk-level FTS (v3.1) ─────────────────────────────────
+  // Same deterministic windows embed.ts vectorizes — lexical and
+  // dense retrieval share granularity.
+  const insertChunkFts = db.prepare(`INSERT INTO chunk_fts(text, clause_id) VALUES (?, ?)`);
+  // Definitional front-matter ("3.x Definitions/Symbols/Abbreviations")
+  // is retrieval poison at chunk granularity: tiny windows containing
+  // every acronym AND its expansion outrank real normative text for any
+  // acronym query. The corpus ships the `acronyms` table for that job —
+  // keep these clauses out of chunk_fts (they stay in clauses/clauses_fts).
+  const DEFINITIONAL_TITLE = /^(definitions?|symbols?|abbreviations?)(\s+(of|and)\b.*)?$/i;
+  // Per-chunk identifier splits (same rationale as the clause-level aux
+  // column): "supportedSRS-Resources" tokenizes as an opaque lump —
+  // append the word-split forms found in THIS window so its chunk wins
+  // AND-queries like (two AND periodic AND srs AND resources).
+  function chunkAux(text: string): string {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const m of text.match(IDENT_RE) ?? []) {
+      if (seen.has(m)) continue;
+      seen.add(m);
+      const words = splitIdentifier(m);
+      if (words.length >= 2) out.push(words.join(" "));
+      if (out.length > 60) break;
+    }
+    return out.join(" · ");
+  }
+  const txChunkFts = db.transaction(() => {
+    let n = 0, skipped = 0;
+    for (const r of rows) {
+      if (DEFINITIONAL_TITLE.test(r.title.trim())) { skipped++; continue; }
+      for (const ch of chunkClause({ id: r.id, title: r.title, text: r.text })) {
+        const aux = chunkAux(ch.text);
+        insertChunkFts.run(aux ? `${ch.text}\n${aux}` : ch.text, r.id);
+        n++;
+      }
+    }
+    log(`  (skipped ${skipped} definitional clause(s) in chunk_fts)`);
+    return n;
+  });
+  log(`✓ inserted ${txChunkFts()} chunk FTS row(s)`);
 
   // ── Insert figure-image blobs (Phase 1) ────────────────────
   // Each clause's figures[] is already in clauses.figures_json. We
@@ -426,6 +548,30 @@ async function main() {
     const vecCount = txVecs();
     log(`✓ inserted ${vecCount} leaf vector(s)`);
 
+    // ── chunk vectors (v3.1 fine-grained dense retrieval) ─────
+    if (fsSync.existsSync(IN_CHUNK_EMB)) {
+      const insertChunkVec = db.prepare(`INSERT INTO chunk_vec(rowid, embedding) VALUES (?, ?)`);
+      const insertChunkMap = db.prepare(`INSERT INTO chunk_map(chunk_rowid, clause_id) VALUES (?, ?)`);
+      const chunkLines = fsSync.readFileSync(IN_CHUNK_EMB, "utf8").split("\n").filter(Boolean);
+      const txChunks = db.transaction(() => {
+        let n = 0, missing = 0;
+        const clauseExists = db.prepare(`SELECT 1 FROM clauses WHERE id = ?`).pluck();
+        for (const ln of chunkLines) {
+          const e = JSON.parse(ln) as { id: string; clauseId: string; embedding_b64: string };
+          if (clauseExists.get(e.clauseId) !== 1) { missing++; continue; }
+          const rowid = BigInt(++n);
+          insertChunkVec.run(rowid, vecToBlob(decodeFloat16Base64(e.embedding_b64)));
+          insertChunkMap.run(rowid, e.clauseId);
+          if (n % 5000 === 0) log(`  chunk vec inserted ${n}/${chunkLines.length}…`);
+        }
+        if (missing > 0) warn(`${missing} chunk embedding(s) had no matching clause row`);
+        return n;
+      });
+      log(`✓ inserted ${txChunks()} chunk vector(s)`);
+    } else {
+      warn(`no ${IN_CHUNK_EMB} — chunk_vec left empty (re-run \`npm run embed\`)`);
+    }
+
     if (parentEmb && parentEmb.length > 0) {
       const insertParent = db.prepare(`INSERT INTO parents (id, child_count) VALUES (?, ?)`);
       const insertParentVec = db.prepare(`INSERT INTO parent_vec(rowid, embedding) VALUES (?, ?)`);
@@ -484,6 +630,10 @@ async function main() {
   meta.run("totalClauses", String(rows.length));
   meta.run("totalFigureImages", String(figImgInserted));
   meta.run("schemaVersion", hasVec ? SCHEMA_VERSION : `${SCHEMA_VERSION}-no-vec`);
+  // FTS carries the aux enrichment column (identifier splits + acronym
+  // expansions). Consumers that build weighted bm25() calls read this to
+  // know the column arity; column-less MATCH / unweighted bm25 need not.
+  meta.run("ftsAux", "1");
   if (hasVec) {
     if (!EMBED_META) {
       warn(`no dist/embed-meta.json — labeling corpus from EMBED_MODEL env/default ` +
@@ -500,6 +650,7 @@ async function main() {
   // ── Optimize ──────────────────────────────────────────────
   log("optimizing (FTS5 optimize + ANALYZE + PRAGMA optimize)…");
   db.exec("INSERT INTO clauses_fts(clauses_fts) VALUES('optimize')");
+  db.exec("INSERT INTO chunk_fts(chunk_fts) VALUES('optimize')");
   db.exec("ANALYZE");
   db.pragma("optimize");
   db.close();
