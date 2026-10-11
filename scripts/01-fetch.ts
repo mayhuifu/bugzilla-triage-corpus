@@ -34,6 +34,10 @@ interface SpecEntry {
   spec: string;        // "38.211", "38.101-1"
   series: string;      // "38"
   title: string;
+  /** Pin an exact Rel-17 tag (e.g. "h80") instead of taking the latest.
+   *  For specs whose newest h* upload is a voided stub that redirects to
+   *  the Rel-18 text (38.523-1 v17.9.0). */
+  versionTag?: string;
 }
 
 interface FetchResult {
@@ -177,15 +181,16 @@ async function listDir(series: string, spec: string): Promise<string[]> {
   return matches.map(m => m.split("/").pop() || m);
 }
 
-/** Pick the latest Rel-17 (h*) zip from a directory listing. */
-function pickLatestRel17(spec: string, listing: string[]): string | null {
-  const stem = specStem(spec);
+/** Pick the pinned or else the latest Rel-17 (h*) zip from a directory listing. */
+function pickRel17(entry: SpecEntry, listing: string[]): string | null {
+  const stem = specStem(entry.spec);
   // Match "<stem>-h<2chars>.zip" — accept upper/lower-case.
   const re = new RegExp(`^${stem.replace(/\./g, "\\.")}-(h[a-z0-9]{2})\\.zip$`, "i");
   const candidates = listing
     .map(f => ({ f, m: f.match(re) }))
     .filter(x => x.m)
-    .map(x => ({ filename: x.f, tag: x.m![1].toLowerCase() }));
+    .map(x => ({ filename: x.f, tag: x.m![1].toLowerCase() }))
+    .filter(x => !entry.versionTag || x.tag === entry.versionTag.toLowerCase());
   if (candidates.length === 0) return null;
   // Lexical sort works for base-36: 0-9 < a-z; 'h00' < 'h10' < ... < 'h99' < 'ha0'.
   candidates.sort((a, b) => a.tag.localeCompare(b.tag));
@@ -289,9 +294,10 @@ async function main() {
   for (const entry of specs) {
     try {
       const listing = await listDir(entry.series, entry.spec);
-      const zipName = pickLatestRel17(entry.spec, listing);
+      const zipName = pickRel17(entry, listing);
       if (!zipName) {
-        missing.push({ spec: entry.spec, reason: `no Rel-17 (h*) ZIP in directory listing` });
+        const wanted = entry.versionTag ? `pinned ${entry.versionTag}` : "Rel-17 (h*)";
+        missing.push({ spec: entry.spec, reason: `no ${wanted} ZIP in directory listing` });
         warn(`${entry.spec}: no Rel-17 version found among ${listing.length} listing entries`);
         continue;
       }

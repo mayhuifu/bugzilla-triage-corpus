@@ -1,6 +1,6 @@
 # bugzilla-triage-corpus
 
-Offline pipeline that builds a **3GPP Release-17 NR + LTE specification corpus** — a single SQLite file with full-text (FTS5/BM25) and dense-vector (sqlite-vec / bge-m3) indexes over ~14,500 leaf clauses from 38 curated specs.
+Offline pipeline that builds a **3GPP Release-17 NR + LTE specification corpus** (plus EPS/5GS NAS, 5GS stage 2, NGAP and the UE AT command set) — a single SQLite file with full-text (FTS5/BM25) and dense-vector (sqlite-vec / bge-m3) indexes over ~18,100 clauses from 43 curated specs.
 
 Built for [bugzilla-triage-desktop](https://github.com/mayhuifu/bugzilla-triage-desktop), but the artifact is **self-contained and app-agnostic**: any application that can open SQLite can use it as a local, offline 3GPP RAG backend. See [Use the corpus in your own app](#use-the-corpus-in-your-own-app) below.
 
@@ -19,12 +19,12 @@ https://github.com/mayhuifu/bugzilla-triage-corpus/releases/download/<tag>/<base
 ```
 
 ```bash
-TAG=rel17-v7
-BASE=3gpp-corpus-rel17-v7-2026-07
+TAG=rel17-v8
+BASE=3gpp-corpus-rel17-v8-2026-10
 curl -LO https://github.com/mayhuifu/bugzilla-triage-corpus/releases/download/$TAG/$BASE.sqlite.gz
 curl -LO https://github.com/mayhuifu/bugzilla-triage-corpus/releases/download/$TAG/$BASE.sha256
 shasum -a 256 -c $BASE.sha256          # verify before unpacking
-gunzip $BASE.sqlite.gz                 # → ~516 MB corpus.sqlite (194 MB gz)
+gunzip $BASE.sqlite.gz                 # → ~634 MB corpus.sqlite (~238 MB gz)
 ```
 
 Always read the `meta` table first and honor its compatibility fields (see below) — releases can change the embedding model, and using the wrong query embedder returns silently-wrong neighbors.
@@ -46,7 +46,7 @@ Always read the `meta` table first and honor its compatibility fields (see below
 
 Key `meta` fields:
 
-| Key | rel17-v7 value | Contract |
+| Key | rel17-v8 value | Contract |
 |---|---|---|
 | `schemaVersion` | `3` (`3-no-vec` = FTS-only build) | table shape |
 | `embeddingModel` | `BAAI/bge-m3` | your query embedder **must match**, else skip vec tables |
@@ -114,8 +114,8 @@ Node.js: same shape with `better-sqlite3` + the `sqlite-vec` npm package (`sqlit
 
 ### 4. What to expect (measured)
 
-- **Tele-Eval** (open-ended telecom QA, 1,499 in-scope questions): answer-containment **82.0% @ top-5**, **91.3% @ top-10** — retrieval-only, no reranker (`npx tsx scripts/benchmark-telecom.ts --dataset teleeval`).
-- Shipped eval gate: hybrid MRR@10 **0.341** vs 0.239 FTS-only baseline on the in-corpus `eval_queries` set.
+- **Tele-Eval** (open-ended telecom QA, 1,499 in-scope questions, measured on rel17-v7): answer-containment **82.0% @ top-5**, **91.3% @ top-10** — retrieval-only, no reranker (`npx tsx scripts/benchmark-telecom.ts --dataset teleeval`).
+- Shipped eval gate: hybrid MRR@10 **0.341** vs 0.239 FTS-only baseline on the in-corpus `eval_queries` set (rel17-v8; unchanged from v7).
 - Terse acronym-pair queries ("1 PUSCH + 1 SRS") benefit most from Tier 3 + an LLM stage; see `scripts/rag-uplink-testset.json` for a hard domain test set with expected clause ids.
 
 ### 5. Rules of thumb
@@ -127,11 +127,12 @@ Node.js: same shape with `better-sqlite3` + the `sqlite-vec` npm package (`sqlit
 ## What the pipeline does
 
 ```
-scripts/curated-specs.json        ← list of 38 NR + LTE specs to index
+scripts/curated-specs.json        ← list of 43 specs to index
         │
         ▼
 01-fetch.ts                       ← directory-listing 3gpp.org/ftp/Specs/archive,
-        │                          picking the LATEST h* (Rel-17) version per spec,
+        │                          picking the LATEST h* (Rel-17) version per spec
+        │                          (or the entry's pinned `versionTag`),
         │                          unzipping each part; legacy Word 97 .doc parts
         │                          (e.g. 38.201) auto-upgraded via libreoffice.
         ▼
@@ -234,21 +235,28 @@ Useful env knobs:
 
 See [scripts/curated-specs.json](scripts/curated-specs.json). Roughly:
 - NR PHY/MAC/RRC: 38.101-1/2/3, 38.133, 38.201, 38.211, 38.212, 38.213, 38.214, 38.215, 38.300, 38.304, 38.306, 38.321, 38.322, 38.323, 38.331
-- NR test: 38.508-1, 38.521-1/2/3, 38.523-1
+- NR RAN interface: 38.413 (NGAP)
+- NR test: 38.508-1, 38.521-1/2/3, 38.523-1 (pinned to v17.8.0, see below)
 - LTE PHY/MAC/RRC: 36.101, 36.133, 36.211, 36.212, 36.213, 36.214, 36.300, 36.304, 36.321, 36.331
 - LTE test: 36.508, 36.521-1/2/3, 36.523-1
-- NAS: 24.501
+- NAS: 24.301 (EPS), 24.501 (5GS)
+- 5GS stage 2: 23.501 (architecture), 23.502 (procedures)
+- AT commands: 27.007
+
+An entry may carry `"versionTag": "h80"` to pin an exact Rel-17 upload instead of the latest. 38.523-1 is pinned because its newest Rel-17 upload (v17.9.0, 2026-09) is a voided stub that points to the Rel-18 text.
+
+Clause counts for the specs added in rel17-v8: 27.007 363, 24.301 837, 23.501 688, 23.502 862, 38.413 771.
 
 ## Version history (consumer-visible)
 
-| | v1 | v2 | **v3.x (rel17-v7)** |
-|---|---|---|---|
-| Retrieval | FTS5 only | + `sqlite-vec` whole-clause + RRF | + chunk-level FTS & vectors, aux enrichment, parent-intro clauses |
-| Embedding | — | bge-m3 (some builds bge-small) | `bge-m3` 1024-dim over chunk windows |
-| Missing content | — | non-leaf intro text dropped (e.g. 38.214 §6.2.1) | fixed (+560 clauses) |
-| Figures | dropped | captions | + image blobs (`figure_images`) |
-| Schema version | `1` | `2` | `3` + `meta.ftsAux=1` (additive) |
-| Artifact | ~40 MB | ~250 MB | ~516 MB (194 MB gz) |
+| | v1 | v2 | v3.x (rel17-v7) | **rel17-v8** |
+|---|---|---|---|---|
+| Retrieval | FTS5 only | + `sqlite-vec` whole-clause + RRF | + chunk-level FTS & vectors, aux enrichment, parent-intro clauses | same as v7 |
+| Embedding | — | bge-m3 (some builds bge-small) | `bge-m3` 1024-dim over chunk windows | same as v7 |
+| Content | — | non-leaf intro text dropped (e.g. 38.214 §6.2.1) | fixed (+560 clauses); 14,567 clauses / 38 specs | + 27.007, 24.301, 23.501, 23.502, 38.413; 18,089 clauses / 43 specs |
+| Figures | dropped | captions | + image blobs (`figure_images`) | same as v7 |
+| Schema version | `1` | `2` | `3` + `meta.ftsAux=1` (additive) | unchanged |
+| Artifact | ~40 MB | ~250 MB | ~516 MB (194 MB gz) | ~634 MB (~238 MB gz) |
 
 ## Coordinated change in the desktop app
 

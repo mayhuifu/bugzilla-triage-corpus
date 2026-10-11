@@ -20,7 +20,7 @@
     { "spec": "38.521-1", "series": "38", "title": "NR UE conformance specification; Radio transmission and reception; Part 1: Range 1 Standalone" },
     { "spec": "38.521-2", "series": "38", "title": "NR UE conformance specification; Radio transmission and reception; Part 2: Range 2 Standalone" },
     { "spec": "38.521-3", "series": "38", "title": "NR UE conformance specification; Radio transmission and reception; Part 3: Range 1 and Range 2 Interworking" },
-    { "spec": "38.523-1", "series": "38", "title": "5GS UE conformance specification; Part 1: Protocol" },
+    { "spec": "38.523-1", "series": "38", "title": "5GS UE conformance specification; Part 1: Protocol", "versionTag": "h80" },
     { "spec": "36.101", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); User Equipment (UE) radio transmission and reception" },
     { "spec": "36.211", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); Physical channels and modulation" },
     { "spec": "36.212", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); Multiplexing and channel coding" },
@@ -39,6 +39,11 @@
     { "spec": "36.304", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); User Equipment (UE) procedures in idle mode" },
     { "spec": "36.133", "series": "36", "title": "Evolved Universal Terrestrial Radio Access (E-UTRA); Requirements for support of radio resource management" },
     { "spec": "38.306", "series": "38", "title": "NR; User Equipment (UE) radio access capabilities" },
-    { "spec": "24.501", "series": "24", "title": "Non-Access-Stratum (NAS) protocol for 5G System (5GS); Stage 3" }
+    { "spec": "24.501", "series": "24", "title": "Non-Access-Stratum (NAS) protocol for 5G System (5GS); Stage 3" },
+    { "spec": "24.301", "series": "24", "title": "Non-Access-Stratum (NAS) protocol for Evolved Packet System (EPS); Stage 3" },
+    { "spec": "27.007", "series": "27", "title": "AT command set for User Equipment (UE)" },
+    { "spec": "23.501", "series": "23", "title": "System architecture for the 5G System (5GS); Stage 2" },
+    { "spec": "23.502", "series": "23", "title": "Procedures for the 5G System (5GS); Stage 2" },
+    { "spec": "38.413", "series": "38", "title": "NG-RAN; NG Application Protocol (NGAP)" }
   ]
 }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-An **offline build pipeline only**, not a runtime application. It produces a single SQLite file (`corpus.sqlite`) containing leaf clauses from ~35 curated 3GPP Rel-17 NR + LTE specifications, indexed with FTS5/BM25. The artifact ships as a GitHub Release asset and is downloaded at runtime by the separate [bugzilla-triage-desktop](https://github.com/mayhuifu/bugzilla-triage-desktop) app.
+An **offline build pipeline only**, not a runtime application. It produces a single SQLite file (`corpus.sqlite`) containing leaf clauses from 43 curated 3GPP Rel-17 specifications (NR + LTE, plus EPS/5GS NAS, 23.501/23.502, NGAP and the 27.007 AT command set), indexed with FTS5/BM25. The artifact ships as a GitHub Release asset and is downloaded at runtime by the separate [bugzilla-triage-desktop](https://github.com/mayhuifu/bugzilla-triage-desktop) app.
 
 Source files live in `scripts/`. There is no `src/` and no compile step — TypeScript runs directly via `tsx` (`tsconfig.json` has `noEmit: true`).
 
@@ -56,7 +56,8 @@ The four stages are **strictly sequential and each writes a manifest** that the 
 
 ## When to bump what
 
-- Adding/removing a spec → edit `scripts/curated-specs.json` only.
+- Adding/removing a spec → edit `scripts/curated-specs.json` only, and add a golden clause for it.
+- A spec's newest h* upload is broken or voided → pin `"versionTag": "hNN"` on its curated entry (38.523-1 is pinned to `h80`; v17.9.0 is a stub pointing at Rel-18).
 - Changing parse output shape → bump `meta.schemaVersion` in `03-index.ts` and coordinate with `bugzilla-triage-desktop/lib/corpus/retriever.ts`.
 - Re-publishing a corpus that's already shipped → bump the patch number in the tag (`rel17-v1` → `rel17-v2`); don't reuse a tag for content that changed unless it's the same calendar build.
 
